@@ -6,6 +6,8 @@ import logging as log
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
 
+import requests
+
 from . import git, gitlab, interval
 from .approvals import Approvals
 from .branch import Branch
@@ -194,10 +196,20 @@ class MergeJob:
         log.info("Waiting for CI to pass for MR !%s", merge_request.iid)
         if TYPE_CHECKING:
             assert self._options.ci_timeout is not None
+        consecutive_errors = 0
         while datetime.datetime.utcnow() - time_0 < self._options.ci_timeout:
-            ci_status, pipeline_msg = self.get_mr_ci_status(
-                merge_request, commit_sha=commit_sha
-            )
+            try:
+                ci_status, pipeline_msg = self.get_mr_ci_status(
+                    merge_request, commit_sha=commit_sha
+                )
+            except (gitlab.InternalServerError, requests.exceptions.Timeout):
+                consecutive_errors += 1
+                if consecutive_errors > 5:
+                    raise
+
+                time.sleep(waiting_time_in_secs)
+                continue
+
             if ci_status == "success":
                 log.info("CI for MR !%s passed. %s", merge_request.iid, pipeline_msg)
                 return
