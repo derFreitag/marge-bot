@@ -165,7 +165,9 @@ class MergeRequest(gitlab.Resource):
 
     @property
     def work_in_progress(self):
-        return self.info["work_in_progress"]
+        return self.info["work_in_progress"] or (
+            "draft" in self.info and self.info["draft"]
+        )
 
     @property
     def approved_by(self):
