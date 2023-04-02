@@ -10,7 +10,7 @@ repository = "https://gitlab.com/marge-org/marge-bot"
 keywords = ["gitlab", "merge request", "merge train"]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8.1"
 ConfigArgParse = "^1.5.3"
 maya = "^0.6.1"
 PyYAML = "^6.0"
@@ -23,8 +23,8 @@ marge = "marge.__main__:run"
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.2"
 pytest-cov = "^4.0.0"
-pytest-flake8 = "^1.1.1"
-pytest-pylint = "^0.19.0"
+flake8 = "^6.0.0"
+pylint = "^2.17.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

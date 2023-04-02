@@ -1,0 +1,42 @@
+include:
+  - template: 'Workflows/MergeRequest-Pipelines.gitlab-ci.yml'
+
+variables:
+  POETRY_HOME: /opt/poetry
+  POETRY_VERSION: 1.4.1
+  PY_COLORS: 1
+
+default:
+  before_script:
+    - python3 -m venv "${POETRY_HOME}"
+    - ${POETRY_HOME}/bin/pip install poetry=="${POETRY_VERSION}"
+    - ${POETRY_HOME}/bin/poetry install --with dev
+
+test:
+  image: python:${PYTHON_VERSION}
+  parallel:
+    matrix:
+      - PYTHON_VERSION:
+          - "3.8"
+          - "3.9"
+          - "3.10"
+          - "3.11"
+  script:
+    - ${POETRY_HOME}/bin/poetry run pytest --cov-report term --cov-report html --cov-report xml --junitxml=test.xml
+  coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
+  artifacts:
+    paths:
+      - htmlcov/
+    reports:
+      junit: test.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+lint:
+  image: python:3.11
+  script:
+    - ${POETRY_HOME}/bin/poetry run flake8
+    - ${POETRY_HOME}/bin/poetry run pylint marge
+  # allow failure so we can clean up the code in follow-up MR
+  allow_failure: true
