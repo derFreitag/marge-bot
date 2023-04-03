@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "marge"
+version = "0.10.1"
+description = "marge-bot is a merge bot for GitLab."
+license = "BSD-3-Clause"
+authors = ["Infrastructure <infrastructure@smarkets.com>"]
+maintainers = ["marge-bot community <marge-bot@proton.me>"]
+readme = "README.md"
+repository = "https://gitlab.com/marge-org/marge-bot"
+keywords = ["gitlab", "merge request", "merge train"]
+
+[tool.poetry.dependencies]
+python = "^3.8.1"
+ConfigArgParse = "^1.5.3"
+maya = "^0.6.1"
+PyYAML = "^6.0"
+requests = "^2.28.2"
+
+[tool.poetry.scripts]
+marge = "marge.__main__:run"
+"marge.app" = "marge.__main__:run"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.2.2"
+pytest-cov = "^4.0.0"
+flake8 = "^6.0.0"
+pylint = "^2.17.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
