@@ -9,10 +9,10 @@ class Approvals(gitlab.Resource):
     def refetch_info(self):
         gitlab_version = self._api.version()
         if gitlab_version.release >= (9, 2, 2):
-            approver_url = '/projects/{0.project_id}/merge_requests/{0.iid}/approvals'.format(self)
+            approver_url = f'/projects/{self.project_id}/merge_requests/{self.iid}/approvals'
         else:
             # GitLab botched the v4 api before 9.2.3
-            approver_url = '/projects/{0.project_id}/merge_requests/{0.id}/approvals'.format(self)
+            approver_url = f'/projects/{self.project_id}/merge_requests/{self.id}/approvals'
 
         # Approvals are in CE since 13.2
         if gitlab_version.is_ee or gitlab_version.release >= (13, 2, 0):
@@ -57,10 +57,10 @@ class Approvals(gitlab.Resource):
     def approve(self, obj):
         """Approve an object which can be a merge_request or an approval."""
         if self._api.version().release >= (9, 2, 2):
-            approve_url = '/projects/{0.project_id}/merge_requests/{0.iid}/approve'.format(obj)
+            approve_url = f'/projects/{obj.project_id}/merge_requests/{obj.iid}/approve'
         else:
             # GitLab botched the v4 api before 9.2.3
-            approve_url = '/projects/{0.project_id}/merge_requests/{0.id}/approve'.format(obj)
+            approve_url = f'/projects/{obj.project_id}/merge_requests/{obj.id}/approve'
 
         for uid in self.approver_ids:
             self._api.call(POST(approve_url), sudo=uid)
