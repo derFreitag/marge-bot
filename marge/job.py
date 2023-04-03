@@ -422,12 +422,12 @@ class MergeJob:
             if branch.protected:
                 raise CannotMerge("Sorry, I can't modify protected branches!") from err
             raise
-        else:
-            if merge_request.sha != expected_sha:
-                raise GitLabRebaseResultMismatch(
-                    gitlab_sha=merge_request.sha,
-                    expected_sha=expected_sha,
-                )
+
+        if merge_request.sha != expected_sha:
+            raise GitLabRebaseResultMismatch(
+                gitlab_sha=merge_request.sha,
+                expected_sha=expected_sha,
+            )
 
 
 def _get_reviewer_names_and_emails(commits, approvals, api):
