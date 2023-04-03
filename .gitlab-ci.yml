@@ -38,5 +38,3 @@ lint:
   script:
     - ${POETRY_HOME}/bin/poetry run flake8
     - ${POETRY_HOME}/bin/poetry run pylint marge
-  # allow failure so we can clean up the code in follow-up MR
-  allow_failure: true
