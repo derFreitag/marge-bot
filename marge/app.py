@@ -317,9 +317,9 @@ def main(args=None):
         elif options.rebase_remotely:
             version = api.version()
             if version.release < (11, 6):
-                raise Exception(
+                raise ValueError(
                     "Need GitLab 11.6+ to use rebase through the API, "
-                    f"but your instance is {format(version)}"
+                    f"but your instance is {version}"
                 )
             fusion = bot.Fusion.gitlab_rebase
         else:
