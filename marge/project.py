@@ -12,7 +12,7 @@ class Project(gitlab.Resource):
 
     @classmethod
     def fetch_by_id(cls, project_id, api):
-        info = api.call(GET('/projects/%s' % project_id))
+        info = api.call(GET(f'/projects/{project_id}'))
         return cls(api, info)
 
     @classmethod
