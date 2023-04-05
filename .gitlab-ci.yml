@@ -34,3 +34,4 @@ lint:
   script:
     - pip install tox
     - tox -e flake8,pylint
+    - tox -e black,isort -- --check

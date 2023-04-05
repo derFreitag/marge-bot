@@ -8,25 +8,31 @@ import requests
 class Api:
     def __init__(self, gitlab_url, auth_token):
         self._auth_token = auth_token
-        self._api_base_url = gitlab_url.rstrip('/') + '/api/v4'
+        self._api_base_url = gitlab_url.rstrip("/") + "/api/v4"
 
     def call(self, command, sudo=None):
         method = command.method
         url = self._api_base_url + command.endpoint
-        headers = {'PRIVATE-TOKEN': self._auth_token}
+        headers = {"PRIVATE-TOKEN": self._auth_token}
         if sudo:
-            headers['SUDO'] = f'{sudo}'
-        log.debug('REQUEST: %s %s %r %r', method.__name__.upper(), url, headers, command.call_args)
+            headers["SUDO"] = f"{sudo}"
+        log.debug(
+            "REQUEST: %s %s %r %r",
+            method.__name__.upper(),
+            url,
+            headers,
+            command.call_args,
+        )
         # Timeout to prevent indefinitely hanging requests. 60s is very conservative,
         # but should be short enough to not cause any practical annoyances. We just
         # crash rather than retry since marge-bot should be run in a restart loop anyway.
         try:
             response = method(url, headers=headers, timeout=60, **command.call_args)
         except requests.exceptions.Timeout as err:
-            log.error('Request timeout: %s', err)
+            log.error("Request timeout: %s", err)
             raise
-        log.debug('RESPONSE CODE: %s', response.status_code)
-        log.debug('RESPONSE BODY: %r', response.content)
+        log.debug("RESPONSE CODE: %s", response.status_code)
+        log.debug("RESPONSE BODY: %r", response.content)
 
         if response.status_code == 202:
             return True  # Accepted
@@ -35,7 +41,9 @@ class Api:
             return True  # NoContent
 
         if response.status_code < 300:
-            return command.extract(response.json()) if command.extract else response.json()
+            return (
+                command.extract(response.json()) if command.extract else response.json()
+            )
 
         if response.status_code == 304:
             return False  # Not Modified
@@ -78,8 +86,8 @@ class Api:
         return result
 
     def version(self):
-        response = self.call(GET('/version'))
-        return Version.parse(response['version'])
+        response = self.call(GET("/version"))
+        return Version.parse(response["version"])
 
 
 def from_singleton_list(fun=None):
@@ -95,13 +103,13 @@ def from_singleton_list(fun=None):
     return extractor
 
 
-class Command(namedtuple('Command', 'endpoint args extract')):
+class Command(namedtuple("Command", "endpoint args extract")):
     def __new__(cls, endpoint, args=None, extract=None):
         return super(Command, cls).__new__(cls, endpoint, args or {}, extract)
 
     @property
     def call_args(self):
-        return {'json': self.args}
+        return {"json": self.args}
 
 
 class GET(Command):
@@ -111,7 +119,7 @@ class GET(Command):
 
     @property
     def call_args(self):
-        return {'params': _prepare_params(self.args)}
+        return {"params": _prepare_params(self.args)}
 
     def for_page(self, page_no):
         args = self.args
@@ -139,7 +147,7 @@ class DELETE(Command):
 def _prepare_params(params):
     def process(val):
         if isinstance(val, bool):
-            return 'true' if val else 'false'
+            return "true" if val else "false"
         return str(val)
 
     return {key: process(val) for key, val in params.items()}
@@ -154,7 +162,7 @@ class ApiError(Exception):
 
         arg = args[1]
         if isinstance(arg, dict):
-            return arg.get('message')
+            return arg.get("message")
         return arg
 
 
@@ -209,31 +217,31 @@ class Resource:
 
     @property
     def id(self):  # pylint: disable=invalid-name
-        return self.info['id']
+        return self.info["id"]
 
     @property
     def api(self):
         return self._api
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self._api}, {self.info})'
+        return f"{self.__class__.__name__}({self._api}, {self.info})"
 
 
-class Version(namedtuple('Version', 'release edition')):
+class Version(namedtuple("Version", "release edition")):
     @classmethod
     def parse(cls, string):
-        maybe_split_string = string.split('-', maxsplit=1)
+        maybe_split_string = string.split("-", maxsplit=1)
         if len(maybe_split_string) == 2:
             release_string, edition = maybe_split_string
         else:
             release_string, edition = string, None
 
-        release = tuple(int(number) for number in release_string.split('.'))
+        release = tuple(int(number) for number in release_string.split("."))
         return cls(release=release, edition=edition)
 
     @property
     def is_ee(self):
-        return self.edition == 'ee'
+        return self.edition == "ee"
 
     def __str__(self):
         return f"{'.'.join(map(str, self.release))}-{self.edition}"

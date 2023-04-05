@@ -1,20 +1,18 @@
 from unittest.mock import Mock
 
-from marge.gitlab import Api, GET
+from marge.gitlab import GET, Api
 from marge.pipeline import Pipeline
-
 
 INFO = {
     "id": 47,
     "status": "pending",
     "ref": "new-pipeline",
-    "sha": "a91957a858320c0e17f3a0eca7cfacbff50ea29a"
+    "sha": "a91957a858320c0e17f3a0eca7cfacbff50ea29a",
 }
 
 
 # pylint: disable=attribute-defined-outside-init
 class TestPipeline:
-
     def setup_method(self, _method):
         self.api = Mock(Api)
 
@@ -23,11 +21,15 @@ class TestPipeline:
         pl1, pl2 = INFO, dict(INFO, id=48)
         api.call = Mock(return_value=[pl1, pl2])
 
-        result = Pipeline.pipelines_by_branch(project_id=1234, branch=INFO['ref'], api=api)
-        api.call.assert_called_once_with(GET(
-            '/projects/1234/pipelines',
-            {'ref': INFO['ref'], 'order_by': 'id', 'sort': 'desc'},
-        ))
+        result = Pipeline.pipelines_by_branch(
+            project_id=1234, branch=INFO["ref"], api=api
+        )
+        api.call.assert_called_once_with(
+            GET(
+                "/projects/1234/pipelines",
+                {"ref": INFO["ref"], "order_by": "id", "sort": "desc"},
+            )
+        )
         assert [pl.info for pl in result] == [pl1, pl2]
 
     def test_pipelines_by_merge_request(self):
@@ -35,10 +37,14 @@ class TestPipeline:
         pl1, pl2 = INFO, dict(INFO, id=48)
         api.call = Mock(return_value=[pl1, pl2])
 
-        result = Pipeline.pipelines_by_merge_request(project_id=1234, merge_request_iid=1, api=api)
-        api.call.assert_called_once_with(GET(
-            '/projects/1234/merge_requests/1/pipelines',
-        ))
+        result = Pipeline.pipelines_by_merge_request(
+            project_id=1234, merge_request_iid=1, api=api
+        )
+        api.call.assert_called_once_with(
+            GET(
+                "/projects/1234/merge_requests/1/pipelines",
+            )
+        )
         assert [pl.info for pl in result] == [pl2, pl1]
 
     def test_properties(self):
