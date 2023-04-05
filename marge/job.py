@@ -9,13 +9,12 @@ from . import git, gitlab
 from .branch import Branch
 from .interval import IntervalUnion
 from .merge_request import MergeRequestRebaseFailed
+from .pipeline import Pipeline
 from .project import Project
 from .user import User
-from .pipeline import Pipeline
 
 
 class MergeJob:
-
     def __init__(self, *, api, user, project, repo, options):
         self._api = api
         self._user = user
@@ -41,11 +40,13 @@ class MergeJob:
 
     def ensure_mergeable_mr(self, merge_request):
         merge_request.refetch_info()
-        log.info('Ensuring MR !%s is mergeable', merge_request.iid)
-        log.debug('Ensuring MR %r is mergeable', merge_request)
+        log.info("Ensuring MR !%s is mergeable", merge_request.iid)
+        log.debug("Ensuring MR %r is mergeable", merge_request)
 
         if merge_request.work_in_progress:
-            raise CannotMerge("Sorry, I can't merge requests marked as Work-In-Progress!")
+            raise CannotMerge(
+                "Sorry, I can't merge requests marked as Work-In-Progress!"
+            )
 
         if merge_request.squash and self._options.requests_commit_tagging:
             raise CannotMerge(
@@ -55,87 +56,85 @@ class MergeJob:
         approvals = merge_request.fetch_approvals()
         if not approvals.sufficient:
             raise CannotMerge(
-                'Insufficient approvals '
-                '(have: {approvals.approver_usernames} missing: {approvals.approvals_left})'
+                "Insufficient approvals "
+                "(have: {approvals.approver_usernames} missing: {approvals.approvals_left})"
             )
 
         if not merge_request.blocking_discussions_resolved:
-            raise CannotMerge("Sorry, I can't merge requests which have unresolved discussions!")
+            raise CannotMerge(
+                "Sorry, I can't merge requests which have unresolved discussions!"
+            )
 
         state = merge_request.state
-        if state not in ('opened', 'reopened', 'locked'):
-            if state in ('merged', 'closed'):
-                raise SkipMerge(f'The merge request is already {state}!')
-            raise CannotMerge(f'The merge request is in an unknown state: {state}')
+        if state not in ("opened", "reopened", "locked"):
+            if state in ("merged", "closed"):
+                raise SkipMerge(f"The merge request is already {state}!")
+            raise CannotMerge(f"The merge request is in an unknown state: {state}")
 
         if self.during_merge_embargo():
-            raise SkipMerge('Merge embargo!')
+            raise SkipMerge("Merge embargo!")
 
         if self._user.id not in merge_request.assignee_ids:
-            raise SkipMerge('It is not assigned to me anymore!')
+            raise SkipMerge("It is not assigned to me anymore!")
 
     def add_trailers(self, merge_request):
-
-        log.info('Adding trailers for MR !%s', merge_request.iid)
+        log.info("Adding trailers for MR !%s", merge_request.iid)
 
         # add Reviewed-by
         should_add_reviewers = (
-            self._options.add_reviewers and
-            self._options.fusion is not Fusion.gitlab_rebase
+            self._options.add_reviewers
+            and self._options.fusion is not Fusion.gitlab_rebase
         )
         reviewers = (
             _get_reviewer_names_and_emails(
                 merge_request.fetch_commits(),
                 merge_request.fetch_approvals(),
                 self._api,
-            ) if should_add_reviewers
+            )
+            if should_add_reviewers
             else None
         )
         sha = None
         if reviewers is not None:
             sha = self._repo.tag_with_trailer(
-                trailer_name='Reviewed-by',
+                trailer_name="Reviewed-by",
                 trailer_values=reviewers,
                 branch=merge_request.source_branch,
-                start_commit='origin/' + merge_request.target_branch,
+                start_commit="origin/" + merge_request.target_branch,
             )
 
         # add Tested-by
         should_add_tested = (
-            self._options.add_tested and
-            self._project.only_allow_merge_if_pipeline_succeeds and
-            self._options.fusion is Fusion.rebase
+            self._options.add_tested
+            and self._project.only_allow_merge_if_pipeline_succeeds
+            and self._options.fusion is Fusion.rebase
         )
 
         tested_by = (
-            [f'{self._user.name} <{merge_request.web_url}>']
+            [f"{self._user.name} <{merge_request.web_url}>"]
             if should_add_tested
             else None
         )
         if tested_by is not None:
             sha = self._repo.tag_with_trailer(
-                trailer_name='Tested-by',
+                trailer_name="Tested-by",
                 trailer_values=tested_by,
                 branch=merge_request.source_branch,
-                start_commit=merge_request.source_branch + '^'
+                start_commit=merge_request.source_branch + "^",
             )
 
         # add Part-of
         should_add_parts_of = (
-            self._options.add_part_of and
-            self._options.fusion is not Fusion.gitlab_rebase
+            self._options.add_part_of
+            and self._options.fusion is not Fusion.gitlab_rebase
         )
-        part_of = (
-            '<f{merge_request.web_url}>'
-            if should_add_parts_of
-            else None
-        )
+        part_of = "<f{merge_request.web_url}>" if should_add_parts_of else None
         if part_of is not None:
             sha = self._repo.tag_with_trailer(
-                trailer_name='Part-of',
+                trailer_name="Part-of",
                 trailer_values=[part_of],
                 branch=merge_request.source_branch,
-                start_commit='origin/' + merge_request.target_branch,
+                start_commit="origin/" + merge_request.target_branch,
             )
         return sha
 
@@ -155,12 +154,18 @@ class MergeJob:
                 merge_request.source_branch,
                 self._api,
             )
-        current_pipeline = next(iter(pipeline for pipeline in pipelines if pipeline.sha == commit_sha), None)
+        current_pipeline = next(
+            iter(pipeline for pipeline in pipelines if pipeline.sha == commit_sha), None
+        )
 
         if current_pipeline:
             ci_status = current_pipeline.status
         else:
-            log.warning('No pipeline listed for %s on branch %s', commit_sha, merge_request.source_branch)
+            log.warning(
+                "No pipeline listed for %s on branch %s",
+                commit_sha,
+                merge_request.source_branch,
+            )
             ci_status = None
 
         return ci_status
@@ -172,30 +177,33 @@ class MergeJob:
         if commit_sha is None:
             commit_sha = merge_request.sha
 
-        log.info('Waiting for CI to pass for MR !%s', merge_request.iid)
+        log.info("Waiting for CI to pass for MR !%s", merge_request.iid)
         while datetime.utcnow() - time_0 < self._options.ci_timeout:
             ci_status = self.get_mr_ci_status(merge_request, commit_sha=commit_sha)
-            if ci_status == 'success':
-                log.info('CI for MR !%s passed', merge_request.iid)
+            if ci_status == "success":
+                log.info("CI for MR !%s passed", merge_request.iid)
                 return
 
-            if ci_status == 'skipped':
-                log.info('CI for MR !%s skipped', merge_request.iid)
+            if ci_status == "skipped":
+                log.info("CI for MR !%s skipped", merge_request.iid)
                 return
 
-            if ci_status == 'failed':
-                raise CannotMerge('CI failed!')
+            if ci_status == "failed":
+                raise CannotMerge("CI failed!")
 
-            if ci_status == 'canceled':
-                raise CannotMerge('Someone canceled the CI.')
+            if ci_status == "canceled":
+                raise CannotMerge("Someone canceled the CI.")
 
-            if ci_status not in ('pending', 'running'):
-                log.warning('Suspicious CI status: %r', ci_status)
+            if ci_status not in ("pending", "running"):
+                log.warning("Suspicious CI status: %r", ci_status)
 
-            log.debug('Waiting for %s secs before polling CI status again', waiting_time_in_secs)
+            log.debug(
+                "Waiting for %s secs before polling CI status again",
+                waiting_time_in_secs,
+            )
             time.sleep(waiting_time_in_secs)
 
-        raise CannotMerge('CI is taking too long.')
+        raise CannotMerge("CI is taking too long.")
 
     def wait_for_merge_status_to_resolve(self, merge_request):
         """
@@ -210,26 +218,36 @@ class MergeJob:
         attempts = 3
         waiting_time_in_secs = 5
 
-        log.info('Waiting for MR !%s to have merge_status can_be_merged', merge_request.iid)
+        log.info(
+            "Waiting for MR !%s to have merge_status can_be_merged", merge_request.iid
+        )
         for attempt in range(attempts):
             merge_request.refetch_info()
             merge_status = merge_request.merge_status
 
-            if merge_status == 'can_be_merged':
-                log.info('MR !%s can be merged on attempt %d', merge_request.iid, attempt)
+            if merge_status == "can_be_merged":
+                log.info(
+                    "MR !%s can be merged on attempt %d", merge_request.iid, attempt
+                )
                 return
 
-            if merge_status == 'cannot_be_merged':
-                log.info('MR !%s cannot be merged on attempt %d', merge_request.iid, attempt)
-                raise CannotMerge('GitLab believes this MR cannot be merged.')
+            if merge_status == "cannot_be_merged":
+                log.info(
+                    "MR !%s cannot be merged on attempt %d", merge_request.iid, attempt
+                )
+                raise CannotMerge("GitLab believes this MR cannot be merged.")
 
-            if merge_status == 'unchecked':
-                log.info('MR !%s merge status currently unchecked on attempt %d.', merge_request.iid, attempt)
+            if merge_status == "unchecked":
+                log.info(
+                    "MR !%s merge status currently unchecked on attempt %d.",
+                    merge_request.iid,
+                    attempt,
+                )
 
             time.sleep(waiting_time_in_secs)
 
     def unassign_from_mr(self, merge_request):
-        log.info('Unassigning from MR !%s', merge_request.iid)
+        log.info("Unassigning from MR !%s", merge_request.iid)
         author_id = merge_request.author_id
         if author_id != self._user.id:
             merge_request.assign_to(author_id)
@@ -247,24 +265,28 @@ class MergeJob:
             # otherwise we'll get a failure on trying to re-instate the previous approvals
             def sufficient_approvals():
                 return merge_request.fetch_approvals().sufficient
+
             # Make sure we don't race by ensuring approvals have reset since the push
             waiting_time_in_secs = 5
             approval_timeout_in_secs = self._options.approval_timeout.total_seconds()
             iterations = round(approval_timeout_in_secs / waiting_time_in_secs)
-            log.info('Checking if approvals have reset')
+            log.info("Checking if approvals have reset")
             while sufficient_approvals() and iterations:
-                log.debug('Approvals haven\'t reset yet, sleeping for %s secs', waiting_time_in_secs)
+                log.debug(
+                    "Approvals haven't reset yet, sleeping for %s secs",
+                    waiting_time_in_secs,
+                )
                 time.sleep(waiting_time_in_secs)
                 iterations -= 1
             if not sufficient_approvals():
                 approvals.reapprove()
 
     def fetch_source_project(self, merge_request):
-        remote = 'origin'
+        remote = "origin"
         remote_url = None
         source_project = self.get_source_project(merge_request)
         if source_project is not self._project:
-            remote = 'source'
+            remote = "source"
             remote_url = source_project.ssh_url_to_repo
             self._repo.fetch(
                 remote_name=remote,
@@ -301,11 +323,11 @@ class MergeJob:
         )
 
     def update_from_target_branch_and_push(
-            self,
-            merge_request,
-            source_repo_url=None,
-            skip_ci=False,
-            add_trailers=True,
+        self,
+        merge_request,
+        source_repo_url=None,
+        skip_ci=False,
+        add_trailers=True,
     ):
         """Updates `source_branch` on `target_branch`, optionally add trailers and push.
         The update strategy can either be rebase or merge. The default is rebase.
@@ -319,7 +341,7 @@ class MergeJob:
         target_branch = merge_request.target_branch
         assert source_repo_url != repo.remote_url
         if source_repo_url is None and source_branch == target_branch:
-            raise CannotMerge('source and target branch seem to coincide!')
+            raise CannotMerge("source and target branch seem to coincide!")
 
         branch_update_done = commits_rewrite_done = False
         try:
@@ -332,9 +354,11 @@ class MergeJob:
             branch_update_done = True
             # The fuse above fetches origin again, so we are now safe to fetch
             # the sha from the remote target branch.
-            target_sha = repo.get_commit_hash('origin/' + target_branch)
+            target_sha = repo.get_commit_hash("origin/" + target_branch)
             if updated_sha == target_sha:
-                raise CannotMerge(f'these changes already exist in branch `{target_branch}`')
+                raise CannotMerge(
+                    f"these changes already exist in branch `{target_branch}`"
+                )
             final_sha = self.add_trailers(merge_request) if add_trailers else None
             final_sha = final_sha or updated_sha
             commits_rewrite_done = True
@@ -354,9 +378,11 @@ class MergeJob:
                 repo.remove_branch(source_branch)
 
             if not branch_update_done:
-                raise CannotMerge('got conflicts while rebasing, your problem now...') from err
+                raise CannotMerge(
+                    "got conflicts while rebasing, your problem now..."
+                ) from err
             if not commits_rewrite_done:
-                raise CannotMerge('failed on filter-branch; check my logs!') from err
+                raise CannotMerge("failed on filter-branch; check my logs!") from err
             raise
         return target_sha, updated_sha, final_sha
 
@@ -392,6 +418,7 @@ class MergeJob:
                 skip_ci=skip_ci,
             )
         except git.GitError as err:
+
             def fetch_remote_branch():
                 return Branch.fetch_by_name(
                     merge_request.source_project_id,
@@ -403,22 +430,28 @@ class MergeJob:
                 raise CannotMerge("Sorry, I can't modify protected branches!") from err
 
             change_type = "merged" if self.opts.fusion == Fusion.merge else "rebased"
-            raise CannotMerge(f'Failed to push {change_type} changes, check my logs!') from err
+            raise CannotMerge(
+                f"Failed to push {change_type} changes, check my logs!"
+            ) from err
 
     def synchronize_using_gitlab_rebase(self, merge_request, expected_sha=None):
         expected_sha = expected_sha or self._repo.get_commit_hash()
         try:
             merge_request.rebase()
         except MergeRequestRebaseFailed as err:
-            raise CannotMerge(f"GitLab failed to rebase the branch saying: {err.args[0]}") from err
+            raise CannotMerge(
+                f"GitLab failed to rebase the branch saying: {err.args[0]}"
+            ) from err
         except TimeoutError as err:
-            raise CannotMerge("GitLab was taking too long to rebase the branch...") from err
+            raise CannotMerge(
+                "GitLab was taking too long to rebase the branch..."
+            ) from err
         except gitlab.ApiError as err:
             branch = Branch.fetch_by_name(
-                        merge_request.source_project_id,
-                        merge_request.source_branch,
-                        self._api,
-                     )
+                merge_request.source_project_id,
+                merge_request.source_branch,
+                self._api,
+            )
             if branch.protected:
                 raise CannotMerge("Sorry, I can't modify protected branches!") from err
             raise
@@ -434,10 +467,12 @@ def _get_reviewer_names_and_emails(commits, approvals, api):
     """Return a list ['A. Prover <a.prover@example.com', ...]` for `merge_request.`"""
     uids = approvals.approver_ids
     users = [User.fetch_by_id(uid, api) for uid in uids]
-    self_reviewed = {commit['author_email'] for commit in commits} & {user.email for user in users}
+    self_reviewed = {commit["author_email"] for commit in commits} & {
+        user.email for user in users
+    }
     if self_reviewed and len(users) <= 1:
-        raise CannotMerge('Commits require at least one independent reviewer.')
-    return [f'{user.name} <{user.email}>' for user in users]
+        raise CannotMerge("Commits require at least one independent reviewer.")
+    return [f"{user.name} <{user.email}>" for user in users]
 
 
 # pylint: disable=invalid-name
@@ -449,22 +484,22 @@ class Fusion(enum.Enum):
 
 
 JOB_OPTIONS = [
-    'add_tested',
-    'add_part_of',
-    'add_reviewers',
-    'reapprove',
-    'approval_timeout',
-    'embargo',
-    'ci_timeout',
-    'fusion',
-    'use_no_ff_batches',
-    'use_merge_commit_batches',
-    'skip_ci_batches',
-    'guarantee_final_pipeline',
+    "add_tested",
+    "add_part_of",
+    "add_reviewers",
+    "reapprove",
+    "approval_timeout",
+    "embargo",
+    "ci_timeout",
+    "fusion",
+    "use_no_ff_batches",
+    "use_merge_commit_batches",
+    "skip_ci_batches",
+    "guarantee_final_pipeline",
 ]
 
 
-class MergeJobOptions(namedtuple('MergeJobOptions', JOB_OPTIONS)):
+class MergeJobOptions(namedtuple("MergeJobOptions", JOB_OPTIONS)):
     __slots__ = ()
 
     @property
@@ -473,11 +508,20 @@ class MergeJobOptions(namedtuple('MergeJobOptions', JOB_OPTIONS)):
 
     @classmethod
     def default(
-            cls, *,
-            add_tested=False, add_part_of=False, add_reviewers=False, reapprove=False,
-            approval_timeout=None, embargo=None, ci_timeout=None, fusion=Fusion.rebase,
-            use_no_ff_batches=False, use_merge_commit_batches=False, skip_ci_batches=False,
-            guarantee_final_pipeline=False,
+        cls,
+        *,
+        add_tested=False,
+        add_part_of=False,
+        add_reviewers=False,
+        reapprove=False,
+        approval_timeout=None,
+        embargo=None,
+        ci_timeout=None,
+        fusion=Fusion.rebase,
+        use_no_ff_batches=False,
+        use_merge_commit_batches=False,
+        skip_ci_batches=False,
+        guarantee_final_pipeline=False,
     ):
         approval_timeout = approval_timeout or timedelta(seconds=0)
         embargo = embargo or IntervalUnion.empty()
@@ -503,7 +547,7 @@ class CannotMerge(Exception):
     def reason(self):
         args = self.args
         if not args:
-            return 'Unknown reason!'
+            return "Unknown reason!"
 
         return args[0]
 

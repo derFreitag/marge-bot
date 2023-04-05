@@ -5,28 +5,31 @@ import unittest.mock as mock
 import marge.git
 import marge.store
 import marge.user
-
 from tests.test_git import get_calls as get_git_calls
 from tests.test_project import INFO as PRJ_INFO
 from tests.test_user import INFO as USER_INFO
 
 
 # pylint: disable=attribute-defined-outside-init
-@mock.patch('marge.git._run')
+@mock.patch("marge.git._run")
 class TestRepoManager:
-
     def setup_method(self, _method):
-        user = marge.user.User(api=None, info=dict(USER_INFO, name='Peter Parker', email='pparker@bugle.com'))
+        user = marge.user.User(
+            api=None,
+            info=dict(USER_INFO, name="Peter Parker", email="pparker@bugle.com"),
+        )
         self.root_dir = tempfile.TemporaryDirectory()
         self.repo_manager = marge.store.SshRepoManager(
-            user=user, root_dir=self.root_dir.name, ssh_key_file='/ssh/key',
+            user=user,
+            root_dir=self.root_dir.name,
+            ssh_key_file="/ssh/key",
         )
 
     def teardown_method(self, _method):
         self.root_dir.cleanup()
 
     def new_project(self, project_id, path_with_namespace):
-        ssh_url_to_repo = 'ssh://buh.com/%s.git' % path_with_namespace
+        ssh_url_to_repo = "ssh://buh.com/%s.git" % path_with_namespace
         info = dict(
             PRJ_INFO,
             id=project_id,
@@ -37,7 +40,7 @@ class TestRepoManager:
 
     def test_creates_and_initializes_repo(self, git_run):
         repo_manager = self.repo_manager
-        project = self.new_project(1234, 'some/stuff')
+        project = self.new_project(1234, "some/stuff")
 
         git_run.assert_not_called()
 
@@ -50,15 +53,18 @@ class TestRepoManager:
             marge.git.GIT_SSH_COMMAND,
         )
         assert get_git_calls(git_run) == [
-            "%s git clone --origin=origin %s %s" % (env, project.ssh_url_to_repo, repo.local_path),
+            "%s git clone --origin=origin %s %s"
+            % (env, project.ssh_url_to_repo, repo.local_path),
             "%s git -C %s config user.email pparker@bugle.com" % (env, repo.local_path),
-            "%s git -C %s config user.name 'Peter Parker'" % (env, repo.local_path)
+            "%s git -C %s config user.name 'Peter Parker'" % (env, repo.local_path),
         ]
 
     def test_caches_repos_by_id(self, git_run):
         repo_manager = self.repo_manager
-        project = self.new_project(1234, 'some/stuff')
-        same_project = marge.project.Project(api=None, info=dict(project.info, name='same/stuff'))
+        project = self.new_project(1234, "some/stuff")
+        same_project = marge.project.Project(
+            api=None, info=dict(project.info, name="same/stuff")
+        )
 
         assert git_run.call_count == 0
 
@@ -71,23 +77,27 @@ class TestRepoManager:
 
     def test_stops_caching_if_ssh_url_changed(self, git_run):
         repo_manager = self.repo_manager
-        project = self.new_project(1234, 'some/stuff')
+        project = self.new_project(1234, "some/stuff")
 
         assert git_run.call_count == 0
 
         repo_first_call = repo_manager.repo_for_project(project)
         assert git_run.call_count == 3
 
-        different_ssh_url = self.new_project(1234, 'same/stuff')
+        different_ssh_url = self.new_project(1234, "same/stuff")
 
         repo_second_call = repo_manager.repo_for_project(different_ssh_url)
         assert git_run.call_count == 6
-        assert repo_first_call.remote_url != repo_second_call.remote_url == different_ssh_url.ssh_url_to_repo
+        assert (
+            repo_first_call.remote_url
+            != repo_second_call.remote_url
+            == different_ssh_url.ssh_url_to_repo
+        )
 
     def test_handles_different_projects(self, git_run):
         repo_manager = self.repo_manager
-        project_1 = self.new_project(1234, 'some/stuff')
-        project_2 = self.new_project(5678, 'other/things')
+        project_1 = self.new_project(1234, "some/stuff")
+        project_2 = self.new_project(5678, "other/things")
 
         assert git_run.call_count == 0
 
@@ -101,8 +111,8 @@ class TestRepoManager:
 
     def test_can_forget_repos(self, git_run):
         repo_manager = self.repo_manager
-        project_1 = self.new_project(1234, 'some/stuff')
-        project_2 = self.new_project(5678, 'other/things')
+        project_1 = self.new_project(1234, "some/stuff")
+        project_2 = self.new_project(5678, "other/things")
 
         assert git_run.call_count == 0
 
@@ -128,4 +138,4 @@ class TestRepoManager:
         assert git_run.call_count == 9
 
         # shouldn't fail
-        repo_manager.forget_repo(self.new_project(90, 'non/existent'))
+        repo_manager.forget_repo(self.new_project(90, "non/existent"))
