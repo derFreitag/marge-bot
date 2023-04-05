@@ -2,11 +2,8 @@ import logging as log
 import re
 from collections import namedtuple
 
-import marge.gitlab as gitlab
-import tests.test_approvals as test_approvals
-import tests.test_commit as test_commit
-import tests.test_project as test_project
-import tests.test_user as test_user
+from marge import gitlab
+from tests import test_approvals, test_commit, test_project, test_user
 
 GET = gitlab.GET
 POST = gitlab.POST
@@ -96,9 +93,8 @@ class MockLab:  # pylint: disable=too-few-public-methods
         api.add_approvals(self.approvals_info)
         api.add_transition(
             GET(
-                "/projects/1234/repository/branches/{target}".format(
-                    target=self.merge_request_info["target_branch"],
-                ),
+                f"/projects/1234/repository/branches/"
+                f'{self.merge_request_info["target_branch"]}'
             ),
             Ok({"commit": {"id": self.initial_master_sha}}),
         )
@@ -113,9 +109,10 @@ class Api(gitlab.Api):
         self.notes = []
 
     def call(self, command, sudo=None):
+        sudo_str = sudo if sudo is not None else ""
         log.info(
             "CALL: %s%s @ %s",
-            "sudo %s " % sudo if sudo is not None else "",
+            f"sudo {sudo_str} ",
             command,
             self.state,
         )
@@ -143,13 +140,13 @@ class Api(gitlab.Api):
                     return []
 
             raise MockedEndpointNotFound(command, sudo, self.state) from err
-        else:
-            if next_state:
-                self.state = next_state
 
-            if side_effect:
-                side_effect()
-            return response()
+        if next_state:
+            self.state = next_state
+
+        if side_effect:
+            side_effect()
+        return response()
 
     def _find(self, command, sudo):
         more_specific = self._transitions.get(_key(command, sudo, self.state))
@@ -168,9 +165,10 @@ class Api(gitlab.Api):
 
         for _from_state in from_states:
             show_from = "*" if _from_state is None else repr(_from_state)
+            sudo_str = sudo if sudo is not None else ""
             log.info(
                 "REGISTERING %s%s from %s to %s",
-                "sudo %s " % sudo if sudo is not None else "",
+                f"sudo {sudo_str} ",
                 command,
                 show_from,
                 show_from if to_state is None else repr(to_state),
@@ -196,7 +194,7 @@ class Api(gitlab.Api):
     def add_project(self, info, sudo=None, from_state=None, to_state=None):
         self.add_resource("/projects/{0.id}", info, sudo, from_state, to_state)
         self.add_transition(
-            GET("/projects/{0.id}/merge_requests".format(attrs(info))),
+            GET(f"/projects/{attrs(info).id}/merge_requests"),
             List(r"/projects/\d+/merge_requests/\d+$", self),
             sudo,
             from_state,
@@ -213,7 +211,7 @@ class Api(gitlab.Api):
         )
 
     def add_commit(self, project_id, info, sudo=None, from_state=None, to_state=None):
-        path = "/projects/%s/repository/commits/{0.id}" % project_id
+        path = f"/projects/{project_id}/repository/commits/{{0.id}}"
         self.add_resource(path, info, sudo, from_state, to_state)
 
     def add_approvals(self, info, sudo=None, from_state=None, to_state=None):
@@ -225,7 +223,7 @@ class Api(gitlab.Api):
     ):
         self.add_transition(
             GET(
-                "/projects/%s/pipelines" % project_id,
+                f"/projects/{project_id}/pipelines",
                 args={"ref": info["ref"], "order_by": "id", "sort": "desc"},
             ),
             Ok([info]),
@@ -239,9 +237,8 @@ class Api(gitlab.Api):
     ):
         self.add_transition(
             POST(
-                "/projects/{0.project_id}/merge_requests/{0.iid}/notes".format(
-                    attrs(merge_request)
-                ),
+                f"/projects/{attrs(merge_request).project_id}/merge_requests/"
+                f"{attrs(merge_request).iid}/notes",
                 args={"body": note},
             ),
             LeaveNote(note, self),

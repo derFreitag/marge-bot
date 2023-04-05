@@ -15,10 +15,10 @@ import marge.job
 import marge.project
 import marge.single_merge_job
 import marge.user
-import tests.test_commit as test_commit
 from marge.gitlab import GET, PUT
 from marge.job import Fusion
 from marge.merge_request import MergeRequest
+from tests import test_commit
 from tests.git_repo_mock import RepoMock
 from tests.gitlab_api_mock import Error, MockLab, Ok
 from tests.test_project import INFO as TEST_PROJECT_INFO
@@ -75,10 +75,8 @@ class SingleJobMockLab(MockLab):
         if expect_gitlab_rebase:
             api.add_transition(
                 PUT(
-                    "/projects/{project_id}/merge_requests/{iid}/rebase".format(
-                        project_id=self.merge_request_info["project_id"],
-                        iid=self.merge_request_info["iid"],
-                    ),
+                    f'/projects/{self.merge_request_info["project_id"]}/merge_requests/'
+                    f'{self.merge_request_info["iid"]}/rebase',
                 ),
                 Ok(True),
                 from_state="initial",
@@ -121,34 +119,28 @@ class SingleJobMockLab(MockLab):
         source_project_id = self.merge_request_info["source_project_id"]
         api.add_transition(
             GET(
-                "/projects/{}/repository/branches/{}".format(
-                    source_project_id,
-                    self.merge_request_info["source_branch"],
-                ),
+                f"/projects/{source_project_id}/repository/branches/"
+                f'{self.merge_request_info["source_branch"]}',
             ),
             Ok({"commit": _commit(commit_id=rewritten_sha, status="running")}),
             from_state="pushed",
         )
         api.add_transition(
             GET(
-                "/projects/{}/repository/branches/{}".format(
-                    source_project_id,
-                    self.merge_request_info["source_branch"],
-                ),
+                f"/projects/{source_project_id}/repository/branches/"
+                f'{self.merge_request_info["source_branch"]}',
             ),
             Ok({"commit": _commit(commit_id=rewritten_sha, status="success")}),
             from_state="passed",
         )
         api.add_transition(
             PUT(
-                "/projects/1234/merge_requests/{iid}/merge".format(
-                    iid=self.merge_request_info["iid"]
-                ),
-                dict(
-                    sha=rewritten_sha,
-                    should_remove_source_branch=True,
-                    merge_when_pipeline_succeeds=True,
-                ),
+                f'/projects/1234/merge_requests/{self.merge_request_info["iid"]}/merge',
+                {
+                    "sha": rewritten_sha,
+                    "should_remove_source_branch": True,
+                    "merge_when_pipeline_succeeds": True,
+                },
             ),
             Ok({}),
             from_state=["passed", "skipped"],
@@ -159,9 +151,8 @@ class SingleJobMockLab(MockLab):
         )
         api.add_transition(
             GET(
-                "/projects/1234/repository/branches/{}".format(
-                    self.merge_request_info["target_branch"]
-                )
+                f"/projects/1234/repository/branches/"
+                f'{self.merge_request_info["target_branch"]}',
             ),
             Ok({"commit": {"id": self.rewritten_sha}}),
             from_state="merged",
@@ -194,14 +185,12 @@ class SingleJobMockLab(MockLab):
 
         self.api.add_transition(
             PUT(
-                "/projects/1234/merge_requests/{iid}".format(
-                    iid=self.merge_request_info["iid"]
-                ),
+                f'/projects/1234/merge_requests/{self.merge_request_info["iid"]}',
                 args={"assignee_id": self.author_id},
             ),
             assign_to_author,
         )
-        error_note = "I couldn't merge this branch: %s" % message
+        error_note = f"I couldn't merge this branch: {message}"
         self.api.expected_note(self.merge_request_info, error_note)
 
         yield
@@ -265,13 +254,13 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         def new_sha(sha):
             # NB. The order matches the one used in the Git mock to run filters
             if add_tested and fusion == marge.job.Fusion.rebase:
-                sha = "add-tested-by(%s)" % sha
+                sha = f"add-tested-by({sha})"
 
             if add_reviewers and fusion != marge.job.Fusion.gitlab_rebase:
-                sha = "add-reviewed-by(%s)" % sha
+                sha = f"add-reviewed-by({sha})"
 
             if add_part_of and fusion != marge.job.Fusion.gitlab_rebase:
-                sha = "add-part-of(%s)" % sha
+                sha = f"add-part-of({sha})"
 
             return sha
 
@@ -367,9 +356,8 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         mocklab, api, job = mocks
         api.add_transition(
             GET(
-                "/projects/1234/repository/branches/{source}".format(
-                    source=mocklab.merge_request_info["source_branch"],
-                ),
+                f"/projects/1234/repository/branches/"
+                f'{mocklab.merge_request_info["source_branch"]}'
             ),
             Ok({"commit": {"id": mocklab.rewritten_sha}}),
             from_state="initial",
@@ -400,18 +388,17 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
 
     def test_succeeds_if_source_is_master(self, mocks_factory):
         mocklab, api, job = mocks_factory(
-            extra_mocklab_opts=dict(
-                merge_request_options={
+            extra_mocklab_opts={
+                "merge_request_options": {
                     "source_branch": "master",
                     "target_branch": "production",
-                }
-            ),
+                },
+            },
         )
         api.add_transition(
             GET(
-                "/projects/1234/repository/branches/{source}".format(
-                    source=mocklab.merge_request_info["source_branch"],
-                ),
+                f"/projects/1234/repository/branches/"
+                f'{mocklab.merge_request_info["source_branch"]}',
             ),
             Ok({"commit": {"id": mocklab.rewritten_sha}}),
             from_state="initial",
@@ -465,9 +452,8 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         new_branch_head_sha = "99ba110035"
         api.add_transition(
             GET(
-                "/projects/{source_project_id}/repository/branches/useless_new_feature".format(
-                    source_project_id=mocklab.merge_request_info["source_project_id"],
-                ),
+                f'/projects/{mocklab.merge_request_info["source_project_id"]}/'
+                f"repository/branches/useless_new_feature",
             ),
             Ok({"commit": _commit(commit_id=new_branch_head_sha, status="success")}),
             from_state="pushed",
@@ -490,9 +476,8 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         mocklab, api, job = mocks_factory(on_push=reject_push)
         api.add_transition(
             GET(
-                "/projects/{source_project_id}/repository/branches/useless_new_feature".format(
-                    source_project_id=mocklab.merge_request_info["source_project_id"],
-                ),
+                f'/projects/{mocklab.merge_request_info["source_project_id"]}/'
+                f"repository/branches/useless_new_feature",
             ),
             Ok(_branch("useless_new_feature", protected=True)),
             from_state="initial",
@@ -502,10 +487,8 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         if fusion is Fusion.gitlab_rebase:
             api.add_transition(
                 PUT(
-                    "/projects/{project_id}/merge_requests/{iid}/rebase".format(
-                        project_id=mocklab.merge_request_info["project_id"],
-                        iid=mocklab.merge_request_info["iid"],
-                    ),
+                    f'/projects/{mocklab.merge_request_info["project_id"]}/'
+                    f'merge_requests/{mocklab.merge_request_info["iid"]}/rebase',
                 ),
                 Error(
                     marge.gitlab.MethodNotAllowed(
@@ -577,14 +560,13 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         )
         api.add_transition(
             PUT(
-                "/projects/1234/merge_requests/{iid}/merge".format(
-                    iid=mocklab.merge_request_info["iid"]
-                ),
-                dict(
-                    sha=first_rewritten_sha,
-                    should_remove_source_branch=True,
-                    merge_when_pipeline_succeeds=True,
-                ),
+                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/'
+                f"merge",
+                {
+                    "sha": first_rewritten_sha,
+                    "should_remove_source_branch": True,
+                    "merge_when_pipeline_succeeds": True,
+                },
             ),
             Error(marge.gitlab.NotAcceptable()),
             from_state="pushed_but_master_moved",
@@ -592,9 +574,8 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         )
         api.add_transition(
             GET(
-                "/projects/{source_project_id}/repository/branches/useless_new_feature".format(
-                    source_project_id=mocklab.merge_request_info["source_project_id"],
-                ),
+                f'/projects/{mocklab.merge_request_info["source_project_id"]}/'
+                f"repository/branches/useless_new_feature",
             ),
             Ok({"commit": _commit(commit_id=first_rewritten_sha, status="success")}),
             from_state="pushed_but_master_moved",
@@ -605,9 +586,9 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
             from_state="merge_rejected",
         )
         if fusion is Fusion.gitlab_rebase:
-            rebase_url = "/projects/{project_id}/merge_requests/{iid}/rebase".format(
-                project_id=mocklab.merge_request_info["project_id"],
-                iid=mocklab.merge_request_info["iid"],
+            rebase_url = (
+                f'/projects/{mocklab.merge_request_info["project_id"]}/'
+                f'merge_requests/{mocklab.merge_request_info["iid"]}/rebase'
             )
 
             api.add_transition(
@@ -641,14 +622,13 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         rewritten_sha = mocklab.rewritten_sha
         api.add_transition(
             PUT(
-                "/projects/1234/merge_requests/{iid}/merge".format(
-                    iid=mocklab.merge_request_info["iid"]
-                ),
-                dict(
-                    sha=rewritten_sha,
-                    should_remove_source_branch=True,
-                    merge_when_pipeline_succeeds=True,
-                ),
+                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/'
+                f"merge",
+                {
+                    "sha": rewritten_sha,
+                    "should_remove_source_branch": True,
+                    "merge_when_pipeline_succeeds": True,
+                },
             ),
             Error(marge.gitlab.NotFound(404, {"message": "404 Branch Not Found"})),
             from_state="passed",
@@ -675,14 +655,13 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         api.add_project(project_info)
         api.add_transition(
             PUT(
-                "/projects/{pid}/merge_requests/{iid}/merge".format(
-                    iid=mocklab.merge_request_info["iid"], pid=project_info["id"]
-                ),
-                dict(
-                    sha=rewritten_sha,
-                    should_remove_source_branch=True,
-                    merge_when_pipeline_succeeds=only_allow_merge_if_pipeline_succeeds,
-                ),
+                f'/projects/{project_info["id"]}/merge_requests/'
+                f'{mocklab.merge_request_info["iid"]}/merge',
+                {
+                    "sha": rewritten_sha,
+                    "should_remove_source_branch": True,
+                    "merge_when_pipeline_succeeds": only_allow_merge_if_pipeline_succeeds,
+                },
             ),
             Ok(True),
             to_state="merged",
@@ -695,14 +674,13 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         rewritten_sha = mocklab.rewritten_sha
         api.add_transition(
             PUT(
-                "/projects/1234/merge_requests/{iid}/merge".format(
-                    iid=mocklab.merge_request_info["iid"]
-                ),
-                dict(
-                    sha=rewritten_sha,
-                    should_remove_source_branch=True,
-                    merge_when_pipeline_succeeds=True,
-                ),
+                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/'
+                f"merge",
+                {
+                    "sha": rewritten_sha,
+                    "should_remove_source_branch": True,
+                    "merge_when_pipeline_succeeds": True,
+                },
             ),
             Error(
                 marge.gitlab.MethodNotAllowed(
@@ -722,21 +700,20 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         with mocklab.expected_failure(message):
             job.execute()
         assert api.state == "now_is_wip"
-        assert api.notes == ["I couldn't merge this branch: %s" % message]
+        assert api.notes == [f"I couldn't merge this branch: {message}"]
 
     def test_guesses_git_hook_error_on_merge_refusal(self, mocks):
         mocklab, api, job = mocks
         rewritten_sha = mocklab.rewritten_sha
         api.add_transition(
             PUT(
-                "/projects/1234/merge_requests/{iid}/merge".format(
-                    iid=mocklab.merge_request_info["iid"]
-                ),
-                dict(
-                    sha=rewritten_sha,
-                    should_remove_source_branch=True,
-                    merge_when_pipeline_succeeds=True,
-                ),
+                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/'
+                f"merge",
+                {
+                    "sha": rewritten_sha,
+                    "should_remove_source_branch": True,
+                    "merge_when_pipeline_succeeds": True,
+                },
             ),
             Error(
                 marge.gitlab.MethodNotAllowed(
@@ -757,21 +734,20 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         with mocklab.expected_failure(message):
             job.execute()
         assert api.state == "rejected_by_git_hook"
-        assert api.notes == ["I couldn't merge this branch: %s" % message]
+        assert api.notes == [f"I couldn't merge this branch: {message}"]
 
     def test_assumes_unresolved_discussions_on_merge_refusal(self, mocks):
         mocklab, api, job = mocks
         rewritten_sha = mocklab.rewritten_sha
         api.add_transition(
             PUT(
-                "/projects/1234/merge_requests/{iid}/merge".format(
-                    iid=mocklab.merge_request_info["iid"]
-                ),
-                dict(
-                    sha=rewritten_sha,
-                    should_remove_source_branch=True,
-                    merge_when_pipeline_succeeds=True,
-                ),
+                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/'
+                f"merge",
+                {
+                    "sha": rewritten_sha,
+                    "should_remove_source_branch": True,
+                    "merge_when_pipeline_succeeds": True,
+                },
             ),
             Error(
                 marge.gitlab.MethodNotAllowed(
@@ -796,21 +772,20 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
             ):
                 job.execute()
         assert api.state == "unresolved_discussions"
-        assert api.notes == ["I couldn't merge this branch: %s" % message]
+        assert api.notes == [f"I couldn't merge this branch: {message}"]
 
     def test_discovers_if_someone_closed_the_merge_request(self, mocks):
         mocklab, api, job = mocks
         rewritten_sha = mocklab.rewritten_sha
         api.add_transition(
             PUT(
-                "/projects/1234/merge_requests/{iid}/merge".format(
-                    iid=mocklab.merge_request_info["iid"]
-                ),
-                dict(
-                    sha=rewritten_sha,
-                    should_remove_source_branch=True,
-                    merge_when_pipeline_succeeds=True,
-                ),
+                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/'
+                f"merge",
+                {
+                    "sha": rewritten_sha,
+                    "should_remove_source_branch": True,
+                    "merge_when_pipeline_succeeds": True,
+                },
             ),
             Error(
                 marge.gitlab.MethodNotAllowed(
@@ -828,21 +803,19 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         with mocklab.expected_failure(message):
             job.execute()
         assert api.state == "oops_someone_closed_it"
-        assert api.notes == ["I couldn't merge this branch: %s" % message]
+        assert api.notes == [f"I couldn't merge this branch: {message}"]
 
     def test_tells_explicitly_that_gitlab_refused_to_merge(self, mocks):
         mocklab, api, job = mocks
         rewritten_sha = mocklab.rewritten_sha
         api.add_transition(
             PUT(
-                "/projects/1234/merge_requests/{iid}/merge".format(
-                    iid=mocklab.merge_request_info["iid"]
-                ),
-                dict(
-                    sha=rewritten_sha,
-                    should_remove_source_branch=True,
-                    merge_when_pipeline_succeeds=True,
-                ),
+                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/merge',
+                {
+                    "sha": rewritten_sha,
+                    "should_remove_source_branch": True,
+                    "merge_when_pipeline_succeeds": True,
+                },
             ),
             Error(
                 marge.gitlab.MethodNotAllowed(
@@ -856,7 +829,7 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         with mocklab.expected_failure(message):
             job.execute()
         assert api.state == "rejected_for_mysterious_reasons"
-        assert api.notes == ["I couldn't merge this branch: %s" % message]
+        assert api.notes == [f"I couldn't merge this branch: {message}"]
 
     def test_wont_merge_wip_stuff(self, mocks):
         mocklab, api, job = mocks
@@ -895,7 +868,7 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
     def test_waits_for_approvals(self, mock_log, mocks_factory):
         five_secs = timedelta(seconds=5)
         _, api, job = mocks_factory(
-            extra_opts=dict(approval_timeout=five_secs, reapprove=True)
+            extra_opts={"approval_timeout": five_secs, "reapprove": True}
         )
         job.execute()
 
@@ -919,12 +892,10 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         remote_target_repo.set_ref(
             target_branch, remote_source_repo.get_ref(source_branch)
         )
-        expected_message = "these changes already exist in branch `%s`" % target_branch
+        expected_message = f"these changes already exist in branch `{target_branch}`"
 
         with mocklab.expected_failure(expected_message):
             job.execute()
 
         assert api.state == "initial"
-        assert api.notes == [
-            "I couldn't merge this branch: {}".format(expected_message)
-        ]
+        assert api.notes == [f"I couldn't merge this branch: {expected_message}"]

@@ -183,11 +183,11 @@ class TestMergeRequest:
             self.api.call.assert_called_once_with(
                 PUT(
                     "/projects/1234/merge_requests/54/merge",
-                    dict(
-                        merge_when_pipeline_succeeds=True,
-                        should_remove_source_branch=boolean,
-                        sha="badc0de",
-                    ),
+                    {
+                        "merge_when_pipeline_succeeds": True,
+                        "should_remove_source_branch": boolean,
+                        "sha": "badc0de",
+                    },
                 )
             )
             self.api.call.reset_mock()
@@ -198,11 +198,11 @@ class TestMergeRequest:
         self.api.call.assert_called_once_with(
             PUT(
                 "/projects/1234/merge_requests/54/merge",
-                dict(
-                    merge_when_pipeline_succeeds=True,
-                    should_remove_source_branch=False,
-                    sha="g00dc0de",
-                ),
+                {
+                    "merge_when_pipeline_succeeds": True,
+                    "should_remove_source_branch": False,
+                    "sha": "g00dc0de",
+                },
             )
         )
 
@@ -212,11 +212,11 @@ class TestMergeRequest:
         self.api.call.assert_called_once_with(
             PUT(
                 "/projects/1234/merge_requests/54/merge",
-                dict(
-                    merge_when_pipeline_succeeds=False,
-                    should_remove_source_branch=False,
-                    sha="badc0de",
-                ),
+                {
+                    "merge_when_pipeline_succeeds": False,
+                    "should_remove_source_branch": False,
+                    "sha": "badc0de",
+                },
             )
         )
 
