@@ -1,6 +1,8 @@
+import dataclasses
 import json
 import logging as log
 from collections import namedtuple
+from typing import Any, Callable, Dict, Optional
 
 import requests
 
@@ -103,9 +105,11 @@ def from_singleton_list(fun=None):
     return extractor
 
 
-class Command(namedtuple("Command", "endpoint args extract")):
-    def __new__(cls, endpoint, args=None, extract=None):
-        return super(Command, cls).__new__(cls, endpoint, args or {}, extract)
+@dataclasses.dataclass(frozen=True)
+class Command:
+    endpoint: str
+    args: Dict[str, Any] = dataclasses.field(default_factory=dict)
+    extract: Optional[Callable] = None
 
     @property
     def call_args(self):
@@ -123,7 +127,7 @@ class GET(Command):
 
     def for_page(self, page_no):
         args = self.args
-        return self._replace(args=dict(args, page=page_no, per_page=100))
+        return dataclasses.replace(self, args=dict(args, page=page_no, per_page=100))
 
 
 class PUT(Command):

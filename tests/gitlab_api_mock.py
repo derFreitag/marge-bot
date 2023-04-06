@@ -1,3 +1,4 @@
+import dataclasses
 import logging as log
 import re
 from collections import namedtuple
@@ -127,7 +128,7 @@ class Api(gitlab.Api):
                     if k not in ["page", "per_page"]
                 )
                 try:
-                    return self.call(command._replace(args=no_page_args))
+                    return self.call(dataclasses.replace(command, args=no_page_args))
                 except MockedEndpointNotFound:
                     pass  # raise the right exception below
             elif page:  # page is not None
@@ -249,7 +250,11 @@ class Api(gitlab.Api):
 
 
 def _key(command, sudo, state):
-    return command._replace(args=frozenset(command.args.items())), sudo, state
+    return (
+        dataclasses.replace(command, args=frozenset(command.args.items())),
+        sudo,
+        state,
+    )
 
 
 class Ok(namedtuple("Ok", "result")):
