@@ -194,9 +194,8 @@ class TestBatchJob:
 
         api.add_transition(
             GET(
-                "/projects/{project_iid}/repository/branches/useless_new_feature".format(
-                    project_iid=mocklab.merge_request_info["source_project_id"],
-                ),
+                f'/projects/{mocklab.merge_request_info["source_project_id"]}/'
+                f"repository/branches/useless_new_feature",
             ),
             Ok({"commit": commit(commit_id="abc", status="running")}),
         )

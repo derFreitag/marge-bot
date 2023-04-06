@@ -3,7 +3,7 @@ import os
 import re
 import shlex
 import subprocess
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 
@@ -80,7 +80,7 @@ class TestRepo:
                 raise subprocess.CalledProcessError(returncode=1, cmd="git rebase blah")
             if "rev-parse" in args or "reset" in args:
                 return mock.Mock()
-            raise Exception("Unexpected call:", args)
+            raise NotImplementedError("Unexpected call:", args)
 
         mocked_run.side_effect = fail_on_filter_branch
 
@@ -191,12 +191,12 @@ class TestRepo:
         repo = self.repo._replace(ssh_key_file="/foo/id_rsa")
         repo.config_user_info("bart", "bart@gmail.com")
         git_ssh = (
-            "GIT_SSH_COMMAND='%s -F /dev/null -o IdentitiesOnly=yes -i /foo/id_rsa'"
-            % (GIT_SSH_COMMAND,)
+            f"GIT_SSH_COMMAND='{GIT_SSH_COMMAND} -F /dev/null -o IdentitiesOnly=yes -i "
+            f"/foo/id_rsa'"
         )
         assert get_calls(mocked_run) == [
-            "%s git -C /tmp/local/path config user.email bart@gmail.com" % git_ssh,
-            "%s git -C /tmp/local/path config user.name bart" % git_ssh,
+            f"{git_ssh} git -C /tmp/local/path config user.email bart@gmail.com",
+            f"{git_ssh} git -C /tmp/local/path config user.name bart",
         ]
 
     def test_passes_reference_repo(self, mocked_run):
@@ -228,9 +228,9 @@ def mocked_stdout(stdout):
 
 
 def _filter_test(message, trailer_name, trailer_values):
-    script = marge.git._filter_branch_script(
+    script = marge.git._filter_branch_script(  # pylint: disable=protected-access
         trailer_name, trailer_values
-    )  # pylint: disable=protected-access
+    )
     result = subprocess.check_output(
         [b"sh", b"-c", script.encode("utf-8")],
         input=message.encode("utf-8"),

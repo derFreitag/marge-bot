@@ -4,15 +4,13 @@ import os
 import re
 import shlex
 import tempfile
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 
-import marge.app as app
 import marge.bot as bot_module
-import marge.interval as interval
-import marge.job as job
 import tests.gitlab_api_mock as gitlab_mock
+from marge import app, interval, job
 from tests.test_user import INFO as user_info
 
 
@@ -214,7 +212,7 @@ def test_rebase_remotely_option_conflicts():
             MARGE_GITLAB_URL="http://foo.com",
         ):
             with pytest.raises(app.MargeBotCliArgError):
-                with main("--rebase-remotely %s" % conflicting_flag):
+                with main(f"--rebase-remotely {conflicting_flag}"):
                     pass
 
 
@@ -373,8 +371,8 @@ def test_disabled_ssh_key_cli_arg():
 def test_config_file():
     with config_file() as config_file_name:
         with env(MARGE_AUTH_TOKEN="ADMIN-TOKEN"):
-            with main("--config-file=%s" % config_file_name) as bot:
-                admin_user_info = dict(**user_info)
+            with main(f"--config-file={config_file_name}") as bot:
+                admin_user_info = {**user_info}
                 admin_user_info["is_admin"] = True
                 assert bot.user.info == admin_user_info
                 assert bot.config.merge_opts != job.MergeJobOptions.default()
@@ -394,8 +392,8 @@ def test_config_file():
 def test_config_overwrites():
     with config_file() as config_file_name:
         with env(MARGE_CI_TIMEOUT="20min", MARGE_AUTH_TOKEN="ADMIN-TOKEN"):
-            with main("--git-timeout=100s --config-file=%s" % config_file_name) as bot:
-                admin_user_info = dict(**user_info)
+            with main(f"--git-timeout=100s --config-file={config_file_name}") as bot:
+                admin_user_info = {**user_info}
                 admin_user_info["is_admin"] = True
                 assert bot.user.info == admin_user_info
                 assert bot.config.merge_opts != job.MergeJobOptions.default()
