@@ -1,11 +1,11 @@
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+import dataclasses
 import enum
 import logging as log
 import time
-from collections import namedtuple
 from datetime import datetime, timedelta
 
-from . import git, gitlab
+from . import git, gitlab, interval
 from .branch import Branch
 from .interval import IntervalUnion
 from .merge_request import MergeRequestRebaseFailed
@@ -483,24 +483,20 @@ class Fusion(enum.Enum):
     gitlab_rebase = 2
 
 
-JOB_OPTIONS = [
-    "add_tested",
-    "add_part_of",
-    "add_reviewers",
-    "reapprove",
-    "approval_timeout",
-    "embargo",
-    "ci_timeout",
-    "fusion",
-    "use_no_ff_batches",
-    "use_merge_commit_batches",
-    "skip_ci_batches",
-    "guarantee_final_pipeline",
-]
-
-
-class MergeJobOptions(namedtuple("MergeJobOptions", JOB_OPTIONS)):
-    __slots__ = ()
+@dataclasses.dataclass
+class MergeJobOptions:
+    add_tested: bool
+    add_part_of: bool
+    add_reviewers: bool
+    reapprove: bool
+    approval_timeout: timedelta
+    embargo: interval.IntervalUnion
+    ci_timeout: timedelta
+    fusion: Fusion
+    use_no_ff_batches: bool
+    use_merge_commit_batches: bool
+    skip_ci_batches: bool
+    guarantee_final_pipeline: bool
 
     @property
     def requests_commit_tagging(self):
