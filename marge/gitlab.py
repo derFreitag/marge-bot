@@ -1,7 +1,6 @@
 import dataclasses
 import json
 import logging as log
-from collections import namedtuple
 from typing import Any, Callable, Dict, Optional
 
 import requests
@@ -231,7 +230,11 @@ class Resource:
         return f"{self.__class__.__name__}({self._api}, {self.info})"
 
 
-class Version(namedtuple("Version", "release edition")):
+@dataclasses.dataclass
+class Version:
+    release: str
+    edition: str
+
     @classmethod
     def parse(cls, string):
         maybe_split_string = string.split("-", maxsplit=1)
