@@ -9,7 +9,7 @@ import sys
 import tempfile
 from datetime import timedelta
 
-import configargparse
+import configargparse  # type: ignore[import]
 
 from . import bot, gitlab, interval
 from . import user as user_module

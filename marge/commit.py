@@ -1,6 +1,5 @@
 import re
-
-from requests.utils import quote
+import urllib.parse
 
 from . import gitlab
 
@@ -21,7 +20,8 @@ class Commit(gitlab.Resource):
     def last_on_branch(cls, project_id, branch, api):
         info = api.call(
             GET(
-                f'/projects/{project_id}/repository/branches/{quote(branch, safe="")}',
+                f"/projects/{project_id}/repository/branches/"
+                f'{urllib.parse.quote(branch, safe="")}',
             )
         )["commit"]
         return cls(api, info)
