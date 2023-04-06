@@ -1,8 +1,8 @@
 # pylint: disable=too-many-locals
 import contextlib
-from collections import namedtuple
+import dataclasses
+import functools
 from datetime import timedelta
-from functools import partial
 from unittest.mock import ANY, patch
 
 import pytest
@@ -20,7 +20,7 @@ from marge.job import Fusion
 from marge.merge_request import MergeRequest
 from tests import test_commit
 from tests.git_repo_mock import RepoMock
-from tests.gitlab_api_mock import Error, MockLab, Ok
+from tests.gitlab_api_mock import Api, Error, MockLab, Ok
 from tests.test_project import INFO as TEST_PROJECT_INFO
 
 INITIAL_MR_SHA = test_commit.INFO["id"]
@@ -200,7 +200,11 @@ class SingleJobMockLab(MockLab):
 
 
 class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
-    Mocks = namedtuple("Mocks", "mocklab api job")
+    @dataclasses.dataclass
+    class Mocks:
+        mocklab: SingleJobMockLab
+        api: Api
+        job: marge.single_merge_job.SingleMergeJob
 
     @pytest.fixture(params=[True, False])
     def fork(self, request):
@@ -274,7 +278,9 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
     @pytest.fixture()
     def mocklab_factory(self, fork, fusion):
         expect_rebase = fusion is Fusion.gitlab_rebase
-        return partial(SingleJobMockLab, fork=fork, expect_gitlab_rebase=expect_rebase)
+        return functools.partial(
+            SingleJobMockLab, fork=fork, expect_gitlab_rebase=expect_rebase
+        )
 
     @pytest.fixture()
     def mocks_factory(self, mocklab_factory, options_factory, update_sha, rewrite_sha):
@@ -347,47 +353,44 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         yield mocks_factory()
 
     def test_succeeds_first_time(self, mocks):
-        _, api, job = mocks
-        job.execute()
-        assert api.state == "merged"
-        assert api.notes == []
+        mocks.job.execute()
+        assert mocks.api.state == "merged"
+        assert mocks.api.notes == []
 
     def test_succeeds_with_updated_branch(self, mocks):
-        mocklab, api, job = mocks
-        api.add_transition(
+        mocks.api.add_transition(
             GET(
                 f"/projects/1234/repository/branches/"
-                f'{mocklab.merge_request_info["source_branch"]}'
+                f'{mocks.mocklab.merge_request_info["source_branch"]}'
             ),
-            Ok({"commit": {"id": mocklab.rewritten_sha}}),
+            Ok({"commit": {"id": mocks.mocklab.rewritten_sha}}),
             from_state="initial",
             to_state="pushed",
         )
-        job.execute()
+        mocks.job.execute()
 
-        assert api.state == "merged"
-        assert api.notes == []
+        assert mocks.api.state == "merged"
+        assert mocks.api.notes == []
 
     def test_succeeds_if_skipped(self, mocks):
-        mocklab, api, job = mocks
-        api.add_pipelines(
-            mocklab.merge_request_info["source_project_id"],
-            _pipeline(sha1=mocklab.rewritten_sha, status="running"),
+        mocks.api.add_pipelines(
+            mocks.mocklab.merge_request_info["source_project_id"],
+            _pipeline(sha1=mocks.mocklab.rewritten_sha, status="running"),
             from_state="pushed",
             to_state="skipped",
         )
-        api.add_pipelines(
-            mocklab.merge_request_info["source_project_id"],
-            _pipeline(sha1=mocklab.rewritten_sha, status="skipped"),
+        mocks.api.add_pipelines(
+            mocks.mocklab.merge_request_info["source_project_id"],
+            _pipeline(sha1=mocks.mocklab.rewritten_sha, status="skipped"),
             from_state=["skipped", "merged"],
         )
-        job.execute()
+        mocks.job.execute()
 
-        assert api.state == "merged"
-        assert api.notes == []
+        assert mocks.api.state == "merged"
+        assert mocks.api.notes == []
 
     def test_succeeds_if_source_is_master(self, mocks_factory):
-        mocklab, api, job = mocks_factory(
+        mocks = mocks_factory(
             extra_mocklab_opts={
                 "merge_request_options": {
                     "source_branch": "master",
@@ -395,77 +398,74 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
                 },
             },
         )
-        api.add_transition(
+        mocks.api.add_transition(
             GET(
                 f"/projects/1234/repository/branches/"
-                f'{mocklab.merge_request_info["source_branch"]}',
+                f'{mocks.mocklab.merge_request_info["source_branch"]}',
             ),
-            Ok({"commit": {"id": mocklab.rewritten_sha}}),
+            Ok({"commit": {"id": mocks.mocklab.rewritten_sha}}),
             from_state="initial",
             to_state="pushed",
         )
-        job.execute()
+        mocks.job.execute()
 
-        assert api.state == "merged"
-        assert api.notes == []
+        assert mocks.api.state == "merged"
+        assert mocks.api.notes == []
 
     def test_fails_if_ci_fails(self, mocks):
-        mocklab, api, job = mocks
-        api.add_pipelines(
-            mocklab.merge_request_info["source_project_id"],
-            _pipeline(sha1=mocklab.rewritten_sha, status="running"),
+        mocks.api.add_pipelines(
+            mocks.mocklab.merge_request_info["source_project_id"],
+            _pipeline(sha1=mocks.mocklab.rewritten_sha, status="running"),
             from_state="pushed",
             to_state="failed",
         )
-        api.add_pipelines(
-            mocklab.merge_request_info["source_project_id"],
-            _pipeline(sha1=mocklab.rewritten_sha, status="failed"),
+        mocks.api.add_pipelines(
+            mocks.mocklab.merge_request_info["source_project_id"],
+            _pipeline(sha1=mocks.mocklab.rewritten_sha, status="failed"),
             from_state=["failed"],
         )
 
-        with mocklab.expected_failure("CI failed!"):
-            job.execute()
+        with mocks.mocklab.expected_failure("CI failed!"):
+            mocks.job.execute()
 
-        assert api.state == "failed"
+        assert mocks.api.state == "failed"
 
     def test_fails_if_ci_canceled(self, mocks):
-        mocklab, api, job = mocks
-        api.add_pipelines(
-            mocklab.merge_request_info["source_project_id"],
-            _pipeline(sha1=mocklab.rewritten_sha, status="running"),
+        mocks.api.add_pipelines(
+            mocks.mocklab.merge_request_info["source_project_id"],
+            _pipeline(sha1=mocks.mocklab.rewritten_sha, status="running"),
             from_state="pushed",
             to_state="canceled",
         )
-        api.add_pipelines(
-            mocklab.merge_request_info["source_project_id"],
-            _pipeline(sha1=mocklab.rewritten_sha, status="canceled"),
+        mocks.api.add_pipelines(
+            mocks.mocklab.merge_request_info["source_project_id"],
+            _pipeline(sha1=mocks.mocklab.rewritten_sha, status="canceled"),
             from_state=["canceled"],
         )
 
-        with mocklab.expected_failure("Someone canceled the CI."):
-            job.execute()
+        with mocks.mocklab.expected_failure("Someone canceled the CI."):
+            mocks.job.execute()
 
-        assert api.state == "canceled"
+        assert mocks.api.state == "canceled"
 
     def test_fails_on_not_acceptable_if_master_did_not_move(self, mocks):
-        mocklab, api, job = mocks
         new_branch_head_sha = "99ba110035"
-        api.add_transition(
+        mocks.api.add_transition(
             GET(
-                f'/projects/{mocklab.merge_request_info["source_project_id"]}/'
+                f'/projects/{mocks.mocklab.merge_request_info["source_project_id"]}/'
                 f"repository/branches/useless_new_feature",
             ),
             Ok({"commit": _commit(commit_id=new_branch_head_sha, status="success")}),
             from_state="pushed",
             to_state="pushed_but_head_changed",
         )
-        with mocklab.expected_failure(
+        with mocks.mocklab.expected_failure(
             "Someone pushed to branch while we were trying to merge"
         ):
-            job.execute()
+            mocks.job.execute()
 
-        assert api.state == "pushed_but_head_changed"
-        assert api.notes == [
+        assert mocks.api.state == "pushed_but_head_changed"
+        assert mocks.api.notes == [
             "I couldn't merge this branch: Someone pushed to branch while we were trying to merge",
         ]
 
@@ -473,10 +473,10 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         def reject_push(*_args, **_kwargs):
             raise marge.git.GitError()
 
-        mocklab, api, job = mocks_factory(on_push=reject_push)
-        api.add_transition(
+        mocks = mocks_factory(on_push=reject_push)
+        mocks.api.add_transition(
             GET(
-                f'/projects/{mocklab.merge_request_info["source_project_id"]}/'
+                f'/projects/{mocks.mocklab.merge_request_info["source_project_id"]}/'
                 f"repository/branches/useless_new_feature",
             ),
             Ok(_branch("useless_new_feature", protected=True)),
@@ -485,10 +485,10 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         )
 
         if fusion is Fusion.gitlab_rebase:
-            api.add_transition(
+            mocks.api.add_transition(
                 PUT(
-                    f'/projects/{mocklab.merge_request_info["project_id"]}/'
-                    f'merge_requests/{mocklab.merge_request_info["iid"]}/rebase',
+                    f'/projects/{mocks.mocklab.merge_request_info["project_id"]}/'
+                    f'merge_requests/{mocks.mocklab.merge_request_info["iid"]}/rebase',
                 ),
                 Error(
                     marge.gitlab.MethodNotAllowed(
@@ -498,10 +498,12 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
                 from_state="initial",
             )
 
-        with mocklab.expected_failure("Sorry, I can't modify protected branches!"):
-            job.execute()
+        with mocks.mocklab.expected_failure(
+            "Sorry, I can't modify protected branches!"
+        ):
+            mocks.job.execute()
 
-        assert api.state == "protected"
+        assert mocks.api.state == "protected"
 
     def test_second_time_if_master_moved(
         self, mocks_factory, fusion, update_sha, rewrite_sha
@@ -517,51 +519,53 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
 
         # pylint: disable=unused-argument
         def push_effects(remote_url, remote_branch, old_sha, new_sha):
-            nonlocal mocklab, target_branch, remote_target_repo
+            nonlocal target_branch, remote_target_repo
 
-            if api.state == "initial":
+            if mocks.api.state == "initial":
                 assert old_sha == INITIAL_MR_SHA
                 assert new_sha == first_rewritten_sha
-                api.state = "pushed_but_master_moved"
+                mocks.api.state = "pushed_but_master_moved"
                 remote_target_repo.set_ref(target_branch, moved_master_sha)
-            elif api.state == "merge_rejected":
+            elif mocks.api.state == "merge_rejected":
                 assert new_sha == second_rewritten_sha
-                api.state = "pushed"
+                mocks.api.state = "pushed"
 
-        mocklab, api, job = mocks_factory(
+        mocks = mocks_factory(
             initial_master_sha=initial_master_sha,
             rewritten_sha=second_rewritten_sha,
             on_push=push_effects,
         )
 
-        source_project_info = mocklab.forked_project_info or mocklab.project_info
-        target_project_info = mocklab.project_info
+        source_project_info = (
+            mocks.mocklab.forked_project_info or mocks.mocklab.project_info
+        )
+        target_project_info = mocks.mocklab.project_info
 
         source_project_url = source_project_info["ssh_url_to_repo"]
         target_project_url = target_project_info["ssh_url_to_repo"]
 
-        source_branch = mocklab.merge_request_info["source_branch"]
-        target_branch = mocklab.merge_request_info["target_branch"]
+        source_branch = mocks.mocklab.merge_request_info["source_branch"]
+        target_branch = mocks.mocklab.merge_request_info["target_branch"]
 
-        remote_source_repo = job.repo.mock_impl.remote_repos[source_project_url]
-        remote_target_repo = job.repo.mock_impl.remote_repos[target_project_url]
+        remote_source_repo = mocks.job.repo.mock_impl.remote_repos[source_project_url]
+        remote_target_repo = mocks.job.repo.mock_impl.remote_repos[target_project_url]
 
-        api.add_merge_request(
+        mocks.api.add_merge_request(
             dict(
-                mocklab.merge_request_info,
+                mocks.mocklab.merge_request_info,
                 sha=first_rewritten_sha,
             ),
             from_state=["pushed_but_master_moved", "merge_rejected"],
         )
-        api.add_pipelines(
-            mocklab.merge_request_info["source_project_id"],
+        mocks.api.add_pipelines(
+            mocks.mocklab.merge_request_info["source_project_id"],
             _pipeline(sha1=first_rewritten_sha, status="success"),
             from_state=["pushed_but_master_moved", "merge_rejected"],
         )
-        api.add_transition(
+        mocks.api.add_transition(
             PUT(
-                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/'
-                f"merge",
+                f"/projects/1234/merge_requests/"
+                f'{mocks.mocklab.merge_request_info["iid"]}/merge',
                 {
                     "sha": first_rewritten_sha,
                     "should_remove_source_branch": True,
@@ -572,26 +576,26 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
             from_state="pushed_but_master_moved",
             to_state="merge_rejected",
         )
-        api.add_transition(
+        mocks.api.add_transition(
             GET(
-                f'/projects/{mocklab.merge_request_info["source_project_id"]}/'
+                f'/projects/{mocks.mocklab.merge_request_info["source_project_id"]}/'
                 f"repository/branches/useless_new_feature",
             ),
             Ok({"commit": _commit(commit_id=first_rewritten_sha, status="success")}),
             from_state="pushed_but_master_moved",
         )
-        api.add_transition(
+        mocks.api.add_transition(
             GET("/projects/1234/repository/branches/master"),
             Ok({"commit": _commit(commit_id=moved_master_sha, status="success")}),
             from_state="merge_rejected",
         )
         if fusion is Fusion.gitlab_rebase:
             rebase_url = (
-                f'/projects/{mocklab.merge_request_info["project_id"]}/'
-                f'merge_requests/{mocklab.merge_request_info["iid"]}/rebase'
+                f'/projects/{mocks.mocklab.merge_request_info["project_id"]}/'
+                f'merge_requests/{mocks.mocklab.merge_request_info["iid"]}/rebase'
             )
 
-            api.add_transition(
+            mocks.api.add_transition(
                 PUT(rebase_url),
                 Ok(True),
                 from_state="initial",
@@ -601,7 +605,7 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
                     remote_target_repo.set_ref(target_branch, moved_master_sha),
                 ),
             )
-            api.add_transition(
+            mocks.api.add_transition(
                 PUT(rebase_url),
                 Ok(True),
                 from_state="merge_rejected",
@@ -611,19 +615,18 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
                 ),
             )
 
-        job.execute()
-        assert api.state == "merged"
-        assert api.notes == [
+        mocks.job.execute()
+        assert mocks.api.state == "merged"
+        assert mocks.api.notes == [
             "My job would be easier if people didn't jump the queue and push directly... *sigh*",
         ]
 
     def test_handles_races_for_merging(self, mocks):
-        mocklab, api, job = mocks
-        rewritten_sha = mocklab.rewritten_sha
-        api.add_transition(
+        rewritten_sha = mocks.mocklab.rewritten_sha
+        mocks.api.add_transition(
             PUT(
-                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/'
-                f"merge",
+                f"/projects/1234/merge_requests/"
+                f'{mocks.mocklab.merge_request_info["iid"]}/merge',
                 {
                     "sha": rewritten_sha,
                     "should_remove_source_branch": True,
@@ -634,29 +637,28 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
             from_state="passed",
             to_state="someone_else_merged",
         )
-        api.add_merge_request(
-            dict(mocklab.merge_request_info, state="merged"),
+        mocks.api.add_merge_request(
+            dict(mocks.mocklab.merge_request_info, state="merged"),
             from_state="someone_else_merged",
         )
-        job.execute()
-        assert api.state == "someone_else_merged"
-        assert api.notes == []
+        mocks.job.execute()
+        assert mocks.api.state == "someone_else_merged"
+        assert mocks.api.notes == []
 
     @pytest.mark.parametrize("only_allow_merge_if_pipeline_succeeds", [True, False])
     def test_calculates_merge_when_pipeline_succeeds_correctly(
         self, mocks, only_allow_merge_if_pipeline_succeeds
     ):
-        mocklab, api, job = mocks
-        rewritten_sha = mocklab.rewritten_sha
+        rewritten_sha = mocks.mocklab.rewritten_sha
         project_info = dict(TEST_PROJECT_INFO)
         project_info[
             "only_allow_merge_if_pipeline_succeeds"
         ] = only_allow_merge_if_pipeline_succeeds
-        api.add_project(project_info)
-        api.add_transition(
+        mocks.api.add_project(project_info)
+        mocks.api.add_transition(
             PUT(
                 f'/projects/{project_info["id"]}/merge_requests/'
-                f'{mocklab.merge_request_info["iid"]}/merge',
+                f'{mocks.mocklab.merge_request_info["iid"]}/merge',
                 {
                     "sha": rewritten_sha,
                     "should_remove_source_branch": True,
@@ -666,16 +668,15 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
             Ok(True),
             to_state="merged",
         )
-        job.execute()
-        assert api.state == "merged"
+        mocks.job.execute()
+        assert mocks.api.state == "merged"
 
     def test_handles_request_becoming_wip_after_push(self, mocks):
-        mocklab, api, job = mocks
-        rewritten_sha = mocklab.rewritten_sha
-        api.add_transition(
+        rewritten_sha = mocks.mocklab.rewritten_sha
+        mocks.api.add_transition(
             PUT(
-                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/'
-                f"merge",
+                f"/projects/1234/merge_requests/"
+                f'{mocks.mocklab.merge_request_info["iid"]}/merge',
                 {
                     "sha": rewritten_sha,
                     "should_remove_source_branch": True,
@@ -690,25 +691,24 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
             from_state="passed",
             to_state="now_is_wip",
         )
-        api.add_merge_request(
-            dict(mocklab.merge_request_info, work_in_progress=True),
+        mocks.api.add_merge_request(
+            dict(mocks.mocklab.merge_request_info, work_in_progress=True),
             from_state="now_is_wip",
         )
         message = (
             "The request was marked as WIP as I was processing it (maybe a WIP commit?)"
         )
-        with mocklab.expected_failure(message):
-            job.execute()
-        assert api.state == "now_is_wip"
-        assert api.notes == [f"I couldn't merge this branch: {message}"]
+        with mocks.mocklab.expected_failure(message):
+            mocks.job.execute()
+        assert mocks.api.state == "now_is_wip"
+        assert mocks.api.notes == [f"I couldn't merge this branch: {message}"]
 
     def test_guesses_git_hook_error_on_merge_refusal(self, mocks):
-        mocklab, api, job = mocks
-        rewritten_sha = mocklab.rewritten_sha
-        api.add_transition(
+        rewritten_sha = mocks.mocklab.rewritten_sha
+        mocks.api.add_transition(
             PUT(
-                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/'
-                f"merge",
+                f"/projects/1234/merge_requests/"
+                f'{mocks.mocklab.merge_request_info["iid"]}/merge',
                 {
                     "sha": rewritten_sha,
                     "should_remove_source_branch": True,
@@ -723,26 +723,25 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
             from_state="passed",
             to_state="rejected_by_git_hook",
         )
-        api.add_merge_request(
-            dict(mocklab.merge_request_info, state="reopened"),
+        mocks.api.add_merge_request(
+            dict(mocks.mocklab.merge_request_info, state="reopened"),
             from_state="rejected_by_git_hook",
         )
         message = (
             "GitLab refused to merge this branch. I suspect that a Push Rule or a git-hook "
             "is rejecting my commits; maybe my email needs to be white-listed?"
         )
-        with mocklab.expected_failure(message):
-            job.execute()
-        assert api.state == "rejected_by_git_hook"
-        assert api.notes == [f"I couldn't merge this branch: {message}"]
+        with mocks.mocklab.expected_failure(message):
+            mocks.job.execute()
+        assert mocks.api.state == "rejected_by_git_hook"
+        assert mocks.api.notes == [f"I couldn't merge this branch: {message}"]
 
     def test_assumes_unresolved_discussions_on_merge_refusal(self, mocks):
-        mocklab, api, job = mocks
-        rewritten_sha = mocklab.rewritten_sha
-        api.add_transition(
+        rewritten_sha = mocks.mocklab.rewritten_sha
+        mocks.api.add_transition(
             PUT(
-                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/'
-                f"merge",
+                f"/projects/1234/merge_requests/"
+                f'{mocks.mocklab.merge_request_info["iid"]}/merge',
                 {
                     "sha": rewritten_sha,
                     "should_remove_source_branch": True,
@@ -757,30 +756,29 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
             from_state="passed",
             to_state="unresolved_discussions",
         )
-        api.add_merge_request(
-            dict(mocklab.merge_request_info),
+        mocks.api.add_merge_request(
+            dict(mocks.mocklab.merge_request_info),
             from_state="unresolved_discussions",
         )
         message = (
             "Gitlab refused to merge this request and I don't know why! "
             "Maybe you have unresolved discussions?"
         )
-        with mocklab.expected_failure(message):
+        with mocks.mocklab.expected_failure(message):
             with patch.dict(
-                mocklab.project_info,
+                mocks.mocklab.project_info,
                 only_allow_merge_if_all_discussions_are_resolved=True,
             ):
-                job.execute()
-        assert api.state == "unresolved_discussions"
-        assert api.notes == [f"I couldn't merge this branch: {message}"]
+                mocks.job.execute()
+        assert mocks.api.state == "unresolved_discussions"
+        assert mocks.api.notes == [f"I couldn't merge this branch: {message}"]
 
     def test_discovers_if_someone_closed_the_merge_request(self, mocks):
-        mocklab, api, job = mocks
-        rewritten_sha = mocklab.rewritten_sha
-        api.add_transition(
+        rewritten_sha = mocks.mocklab.rewritten_sha
+        mocks.api.add_transition(
             PUT(
-                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/'
-                f"merge",
+                f"/projects/1234/merge_requests/"
+                f'{mocks.mocklab.merge_request_info["iid"]}/merge',
                 {
                     "sha": rewritten_sha,
                     "should_remove_source_branch": True,
@@ -795,22 +793,22 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
             from_state="passed",
             to_state="oops_someone_closed_it",
         )
-        api.add_merge_request(
-            dict(mocklab.merge_request_info, state="closed"),
+        mocks.api.add_merge_request(
+            dict(mocks.mocklab.merge_request_info, state="closed"),
             from_state="oops_someone_closed_it",
         )
         message = "Someone closed the merge request while I was attempting to merge it."
-        with mocklab.expected_failure(message):
-            job.execute()
-        assert api.state == "oops_someone_closed_it"
-        assert api.notes == [f"I couldn't merge this branch: {message}"]
+        with mocks.mocklab.expected_failure(message):
+            mocks.job.execute()
+        assert mocks.api.state == "oops_someone_closed_it"
+        assert mocks.api.notes == [f"I couldn't merge this branch: {message}"]
 
     def test_tells_explicitly_that_gitlab_refused_to_merge(self, mocks):
-        mocklab, api, job = mocks
-        rewritten_sha = mocklab.rewritten_sha
-        api.add_transition(
+        rewritten_sha = mocks.mocklab.rewritten_sha
+        mocks.api.add_transition(
             PUT(
-                f'/projects/1234/merge_requests/{mocklab.merge_request_info["iid"]}/merge',
+                f"/projects/1234/merge_requests/"
+                f'{mocks.mocklab.merge_request_info["iid"]}/merge',
                 {
                     "sha": rewritten_sha,
                     "should_remove_source_branch": True,
@@ -826,76 +824,75 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
             to_state="rejected_for_mysterious_reasons",
         )
         message = "Gitlab refused to merge this request and I don't know why!"
-        with mocklab.expected_failure(message):
-            job.execute()
-        assert api.state == "rejected_for_mysterious_reasons"
-        assert api.notes == [f"I couldn't merge this branch: {message}"]
+        with mocks.mocklab.expected_failure(message):
+            mocks.job.execute()
+        assert mocks.api.state == "rejected_for_mysterious_reasons"
+        assert mocks.api.notes == [f"I couldn't merge this branch: {message}"]
 
     def test_wont_merge_wip_stuff(self, mocks):
-        mocklab, api, job = mocks
-        wip_merge_request = dict(mocklab.merge_request_info, work_in_progress=True)
-        api.add_merge_request(wip_merge_request, from_state="initial")
+        wip_merge_request = dict(
+            mocks.mocklab.merge_request_info, work_in_progress=True
+        )
+        mocks.api.add_merge_request(wip_merge_request, from_state="initial")
 
-        with mocklab.expected_failure(
+        with mocks.mocklab.expected_failure(
             "Sorry, I can't merge requests marked as Work-In-Progress!"
         ):
-            job.execute()
+            mocks.job.execute()
 
-        assert api.state == "initial"
-        assert api.notes == [
+        assert mocks.api.state == "initial"
+        assert mocks.api.notes == [
             "I couldn't merge this branch: Sorry, I can't merge requests marked as Work-In-Progress!",
         ]
 
     def test_wont_merge_branches_with_autosquash_if_rewriting(self, mocks):
-        mocklab, api, job = mocks
+        autosquash_merge_request = dict(mocks.mocklab.merge_request_info, squash=True)
+        mocks.api.add_merge_request(autosquash_merge_request, from_state="initial")
 
-        autosquash_merge_request = dict(mocklab.merge_request_info, squash=True)
-        api.add_merge_request(autosquash_merge_request, from_state="initial")
+        admin_user = dict(mocks.mocklab.user_info, is_admin=True)
+        mocks.api.add_user(admin_user, is_current=True)
 
-        admin_user = dict(mocklab.user_info, is_admin=True)
-        api.add_user(admin_user, is_current=True)
-
-        if job.opts.requests_commit_tagging:
+        if mocks.job.opts.requests_commit_tagging:
             message = "Sorry, merging requests marked as auto-squash would ruin my commit tagging!"
-            with mocklab.expected_failure(message):
-                job.execute()
-            assert api.state == "initial"
+            with mocks.mocklab.expected_failure(message):
+                mocks.job.execute()
+            assert mocks.api.state == "initial"
         else:
-            job.execute()
-            assert api.state == "merged"
+            mocks.job.execute()
+            assert mocks.api.state == "merged"
 
     @patch("marge.job.log", autospec=True)
     def test_waits_for_approvals(self, mock_log, mocks_factory):
         five_secs = timedelta(seconds=5)
-        _, api, job = mocks_factory(
+        mocks = mocks_factory(
             extra_opts={"approval_timeout": five_secs, "reapprove": True}
         )
-        job.execute()
+        mocks.job.execute()
 
         mock_log.info.assert_any_call("Checking if approvals have reset")
         mock_log.debug.assert_any_call(
             "Approvals haven't reset yet, sleeping for %s secs", ANY
         )
-        assert api.state == "merged"
+        assert mocks.api.state == "merged"
 
     def test_fails_if_changes_already_exist(self, mocks):
-        mocklab, api, job = mocks
-
-        source_project_info = mocklab.forked_project_info or mocklab.project_info
+        source_project_info = (
+            mocks.mocklab.forked_project_info or mocks.mocklab.project_info
+        )
         source_project_url = source_project_info["ssh_url_to_repo"]
-        target_project_url = mocklab.project_info["ssh_url_to_repo"]
-        remote_source_repo = job.repo.mock_impl.remote_repos[source_project_url]
-        remote_target_repo = job.repo.mock_impl.remote_repos[target_project_url]
-        source_branch = mocklab.merge_request_info["source_branch"]
-        target_branch = mocklab.merge_request_info["target_branch"]
+        target_project_url = mocks.mocklab.project_info["ssh_url_to_repo"]
+        remote_source_repo = mocks.job.repo.mock_impl.remote_repos[source_project_url]
+        remote_target_repo = mocks.job.repo.mock_impl.remote_repos[target_project_url]
+        source_branch = mocks.mocklab.merge_request_info["source_branch"]
+        target_branch = mocks.mocklab.merge_request_info["target_branch"]
 
         remote_target_repo.set_ref(
             target_branch, remote_source_repo.get_ref(source_branch)
         )
         expected_message = f"these changes already exist in branch `{target_branch}`"
 
-        with mocklab.expected_failure(expected_message):
-            job.execute()
+        with mocks.mocklab.expected_failure(expected_message):
+            mocks.job.execute()
 
-        assert api.state == "initial"
-        assert api.notes == [f"I couldn't merge this branch: {expected_message}"]
+        assert mocks.api.state == "initial"
+        assert mocks.api.notes == [f"I couldn't merge this branch: {expected_message}"]
