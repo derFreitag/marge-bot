@@ -1,11 +1,14 @@
+import dataclasses
+import datetime
 import logging as log
+import re
 import time
-from collections import namedtuple
 from tempfile import TemporaryDirectory
 
 from . import batch_job, git, job
 from . import merge_request as merge_request_module
 from . import single_merge_job, store
+from . import user as user_module
 from .project import AccessLevel, Project
 
 MergeRequest = merge_request_module.MergeRequest
@@ -206,14 +209,21 @@ class Bot:
         )
 
 
-class BotConfig(
-    namedtuple(
-        "BotConfig",
-        "user use_https auth_token ssh_key_file project_regexp merge_order merge_opts "
-        + "git_timeout git_reference_repo branch_regexp source_branch_regexp batch cli",
-    )
-):
-    pass
+@dataclasses.dataclass
+class BotConfig:
+    user: user_module.User
+    use_https: bool
+    auth_token: str
+    ssh_key_file: str
+    project_regexp: re.Pattern
+    merge_order: str
+    merge_opts: job.MergeJobOptions
+    git_timeout: datetime.timedelta
+    git_reference_repo: str
+    branch_regexp: re.Pattern
+    source_branch_regexp: re.Pattern
+    batch: bool
+    cli: bool
 
 
 MergeJobOptions = job.MergeJobOptions
