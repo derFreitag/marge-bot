@@ -1,10 +1,12 @@
+import dataclasses
+import datetime
 import logging as log
 import os
 import shlex
 import subprocess
 import sys
-from collections import namedtuple
 from subprocess import PIPE, TimeoutExpired
+from typing import Optional
 
 from . import trailerfilter
 
@@ -28,7 +30,14 @@ def _filter_branch_script(trailer_name, trailer_values):
     return filter_script
 
 
-class Repo(namedtuple("Repo", "remote_url local_path ssh_key_file timeout reference")):
+@dataclasses.dataclass
+class Repo:
+    remote_url: str
+    local_path: str
+    ssh_key_file: Optional[str]
+    timeout: datetime.timedelta
+    reference: str
+
     def clone(self):
         reference_flag = "--reference=" + self.reference if self.reference else ""
         self.git(
