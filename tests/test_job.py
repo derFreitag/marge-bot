@@ -1,4 +1,5 @@
 # pylint: disable=protected-access
+import dataclasses
 from datetime import timedelta
 from unittest.mock import ANY, MagicMock, create_autospec, patch
 
@@ -236,6 +237,6 @@ class TestMergeJobOptions:
 
     def test_default_ci_time(self):
         three_min = timedelta(minutes=3)
-        assert MergeJobOptions.default(
-            ci_timeout=three_min
-        ) == MergeJobOptions.default()._replace(ci_timeout=three_min)
+        assert MergeJobOptions.default(ci_timeout=three_min) == dataclasses.replace(
+            MergeJobOptions.default(), ci_timeout=three_min
+        )

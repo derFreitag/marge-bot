@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import os
 import re
@@ -188,7 +189,7 @@ class TestRepo:
         assert get_calls(mocked_run)[-1] == "git -C /tmp/local/path rev-parse master"
 
     def test_passes_ssh_key(self, mocked_run):
-        repo = self.repo._replace(ssh_key_file="/foo/id_rsa")
+        repo = dataclasses.replace(self.repo, ssh_key_file="/foo/id_rsa")
         repo.config_user_info("bart", "bart@gmail.com")
         git_ssh = (
             f"GIT_SSH_COMMAND='{GIT_SSH_COMMAND} -F /dev/null -o IdentitiesOnly=yes -i "
@@ -200,7 +201,7 @@ class TestRepo:
         ]
 
     def test_passes_reference_repo(self, mocked_run):
-        repo = self.repo._replace(reference="/foo/reference_repo")
+        repo = dataclasses.replace(self.repo, reference="/foo/reference_repo")
         repo.clone()
         assert get_calls(mocked_run) == [
             "git clone --origin=origin --reference=/foo/reference_repo ssh://git@git.foo.com/some/repo.git "

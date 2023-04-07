@@ -1,4 +1,5 @@
 # pylint: disable=protected-access
+import datetime
 from unittest.mock import ANY, create_autospec, patch
 
 import pytest
@@ -41,7 +42,16 @@ class TestBatchJob:
             "api": api,
             "user": marge.user.User.myself(api),
             "project": marge.project.Project.fetch_by_id(project_id, api),
-            "repo": create_autospec(marge.git.Repo, spec_set=True),
+            "repo": create_autospec(
+                marge.git.Repo(
+                    remote_url="",
+                    local_path="",
+                    ssh_key_file=None,
+                    timeout=datetime.timedelta(0),
+                    reference="",
+                ),
+                spec_set=True,
+            ),
             "options": MergeJobOptions.default(),
             "merge_requests": [merge_request],
         }

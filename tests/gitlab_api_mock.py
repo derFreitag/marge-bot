@@ -1,6 +1,7 @@
+import dataclasses
 import logging as log
 import re
-from collections import namedtuple
+from typing import Any, Dict
 
 from marge import gitlab
 from tests import test_approvals, test_commit, test_project, test_user
@@ -127,7 +128,7 @@ class Api(gitlab.Api):
                     if k not in ["page", "per_page"]
                 )
                 try:
-                    return self.call(command._replace(args=no_page_args))
+                    return self.call(dataclasses.replace(command, args=no_page_args))
                 except MockedEndpointNotFound:
                     pass  # raise the right exception below
             elif page:  # page is not None
@@ -249,24 +250,38 @@ class Api(gitlab.Api):
 
 
 def _key(command, sudo, state):
-    return command._replace(args=frozenset(command.args.items())), sudo, state
+    return (
+        dataclasses.replace(command, args=frozenset(command.args.items())),
+        sudo,
+        state,
+    )
 
 
-class Ok(namedtuple("Ok", "result")):
+@dataclasses.dataclass
+class Ok:
+    result: Dict[str, Any]
+
     def __call__(self):
         return self.result
 
 
-class Error(namedtuple("Error", "exc")):
+@dataclasses.dataclass
+class Error:
+    exc: Exception
+
     def __call__(self):
         raise self.exc
 
 
-class List(namedtuple("List", "prefix api")):
+@dataclasses.dataclass
+class List:
+    prefix: str
+    api: Api
+
     def _call__(self):
         candidates = (
             command
-            for command, _ in self.api._transitions.keys()  # pylint: disable=protected-access
+            for command, _ in self.api._transitions  # pylint: disable=protected-access
             if isinstance(command, GET) and re.match(self.prefix, command.endpoint)
         )
 
@@ -280,7 +295,11 @@ class List(namedtuple("List", "prefix api")):
         return results
 
 
-class LeaveNote(namedtuple("LeaveNote", "note api")):
+@dataclasses.dataclass
+class LeaveNote:
+    note: str
+    api: Api
+
     def __call__(self):
         self.api.notes.append(self.note)
         return {}
@@ -291,4 +310,5 @@ class MockedEndpointNotFound(Exception):
 
 
 def attrs(_dict):
-    return namedtuple("Attrs", _dict.keys())(*_dict.values())
+    attrs_cls = dataclasses.make_dataclass("Attrs", fields=list(_dict.keys()))
+    return attrs_cls(**_dict)
