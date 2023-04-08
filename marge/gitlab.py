@@ -1,7 +1,7 @@
 import dataclasses
 import json
 import logging as log
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import requests
 
@@ -232,8 +232,8 @@ class Resource:
 
 @dataclasses.dataclass
 class Version:
-    release: str
-    edition: str
+    release: Tuple[int, int, int]
+    edition: Optional[str]
 
     @classmethod
     def parse(cls, string):

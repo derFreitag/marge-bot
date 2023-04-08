@@ -27,18 +27,16 @@ class Project(gitlab.Resource):
 
     @classmethod
     def fetch_all_mine(cls, api):
+        # GitLab has an issue where projects may not show appropriate permissions in nested groups. Using
+        # `min_access_level` is known to provide the correct projects. See #156 for more details.
+        #
+        # 2023 update: This is most likely not true anymore, but best to be explicit.
         projects_kwargs = {
             "membership": True,
+            "min_access_level": int(AccessLevel.developer),
             "with_merge_requests_enabled": True,
             "archived": False,
         }
-
-        # GitLab has an issue where projects may not show appropriate permissions in nested groups. Using
-        # `min_access_level` is known to provide the correct projects, so we'll prefer this method
-        # if it's available. See #156 for more details.
-        use_min_access_level = api.version().release >= (11, 2)
-        if use_min_access_level:
-            projects_kwargs["min_access_level"] = int(AccessLevel.developer)
 
         projects_info = api.collect_all_pages(
             GET(

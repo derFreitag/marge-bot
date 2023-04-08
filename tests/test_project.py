@@ -2,7 +2,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from marge.gitlab import GET, Api, Version
+from marge.gitlab import GET, Api
 from marge.project import AccessLevel, Project
 
 INFO = {
@@ -64,7 +64,6 @@ class TestProject:
 
         api = self.api
         api.collect_all_pages = Mock(return_value=[prj1, prj2])
-        api.version = Mock(return_value=Version.parse("11.0.0-ee"))
 
         result = Project.fetch_all_mine(api)
         api.collect_all_pages.assert_called_once_with(
@@ -86,7 +85,6 @@ class TestProject:
 
         api = self.api
         api.collect_all_pages = Mock(return_value=[prj1, prj2])
-        api.version = Mock(return_value=Version.parse("11.2.0-ee"))
 
         result = Project.fetch_all_mine(api)
         api.collect_all_pages.assert_called_once_with(

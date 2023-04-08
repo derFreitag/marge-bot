@@ -52,18 +52,9 @@ class MergeRequest(gitlab.Resource):
                 if match_body in note.get("body"):
                     date_string = note.get("created_at")
                     date_format = "%Y-%m-%dT%H:%M:%S.%f%z"
-                    if (sys.version_info.major, sys.version_info.minor) <= (3, 6):
-                        assigned = (
-                            datetime.datetime.strptime(
-                                date_string[:-1], date_format[:-2]
-                            )
-                            .replace(tzinfo=datetime.timezone.utc)
-                            .timestamp()
-                        )
-                    else:
-                        assigned = datetime.datetime.strptime(
-                            date_string, date_format
-                        ).timestamp()
+                    assigned = datetime.datetime.strptime(
+                        date_string, date_format
+                    ).timestamp()
                     if assigned > assigned_at:
                         assigned_at = assigned
         return assigned_at
@@ -192,12 +183,7 @@ class MergeRequest(gitlab.Resource):
         )
 
     def comment(self, message):
-        if self._api.version().release >= (9, 2, 2):
-            notes_url = f"/projects/{self.project_id}/merge_requests/{self.iid}/notes"
-        else:
-            # GitLab botched the v4 api before 9.2.2
-            notes_url = f"/projects/{self.project_id}/merge_requests/{self.id}/notes"
-
+        notes_url = f"/projects/{self.project_id}/merge_requests/{self.iid}/notes"
         return self._api.call(POST(notes_url, {"body": message}))
 
     def rebase(self):
