@@ -1,3 +1,5 @@
+from typing import List
+
 from . import gitlab
 
 GET, POST = gitlab.GET, gitlab.POST
@@ -19,7 +21,7 @@ class Pipeline(gitlab.Resource):
         status=None,
         order_by="id",
         sort="desc",
-    ):
+    ) -> List["Pipeline"]:
         params = {
             "ref": branch if ref is None else ref,
             "order_by": order_by,
@@ -37,7 +39,9 @@ class Pipeline(gitlab.Resource):
         return [cls(api, pipeline_info, project_id) for pipeline_info in pipelines_info]
 
     @classmethod
-    def pipelines_by_merge_request(cls, project_id, merge_request_iid, api):
+    def pipelines_by_merge_request(
+        cls, project_id, merge_request_iid, api
+    ) -> List["Pipeline"]:
         """Fetch all pipelines for a merge request in descending order of pipeline ID."""
         pipelines_info = api.call(
             GET(
@@ -59,7 +63,7 @@ class Pipeline(gitlab.Resource):
         return self.info["id"]
 
     @property
-    def status(self):
+    def status(self) -> str:
         return self.info["status"]
 
     @property

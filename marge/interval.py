@@ -1,3 +1,4 @@
+import datetime
 import operator
 from enum import Enum, unique
 
@@ -138,5 +139,5 @@ class IntervalUnion:
         strings = string.split(",")
         return cls(WeeklyInterval.from_human(s) for s in strings)
 
-    def covers(self, date):
+    def covers(self, date: datetime.datetime) -> bool:
         return any(interval.covers(date) for interval in self._intervals)

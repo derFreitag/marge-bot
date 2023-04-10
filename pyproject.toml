@@ -56,6 +56,7 @@ module = [
     "marge.approvals",
     "marge.git",
     "marge.gitlab",
+    "marge.job",
 ]
 # strict = true
 check_untyped_defs = true

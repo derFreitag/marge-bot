@@ -9,7 +9,7 @@ GET = gitlab.GET
 
 class Project(gitlab.Resource):
     @classmethod
-    def fetch_by_id(cls, project_id, api):
+    def fetch_by_id(cls, project_id, api) -> "Project":
         info = api.call(GET(f"/projects/{project_id}"))
         return cls(api, info)
 
@@ -88,7 +88,7 @@ class Project(gitlab.Resource):
         return self.info["path_with_namespace"]
 
     @property
-    def ssh_url_to_repo(self):
+    def ssh_url_to_repo(self) -> str:
         return self.info["ssh_url_to_repo"]
 
     @property
