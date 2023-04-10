@@ -53,6 +53,7 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = [
     "marge.app",
+    "marge.approvals",
     "marge.gitlab",
 ]
 # strict = true
