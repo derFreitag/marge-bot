@@ -6,7 +6,7 @@ import shlex
 import subprocess
 import sys
 from subprocess import PIPE, TimeoutExpired
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from . import trailerfilter
 
@@ -18,7 +18,7 @@ from . import trailerfilter
 GIT_SSH_COMMAND = "ssh -o StrictHostKeyChecking=no "
 
 
-def _filter_branch_script(trailer_name, trailer_values):
+def _filter_branch_script(trailer_name: str, trailer_values: List[str]) -> str:
     trailers: str = shlex.quote(
         "\n".join(
             f"{trailer_name}: {trailer_value}"
@@ -38,7 +38,7 @@ class Repo:
     timeout: datetime.timedelta
     reference: str
 
-    def clone(self):
+    def clone(self) -> None:
         reference_flag = "--reference=" + self.reference if self.reference else ""
         self.git(
             "clone",
@@ -49,11 +49,11 @@ class Repo:
             from_repo=False,
         )
 
-    def config_user_info(self, user_name, user_email):
+    def config_user_info(self, user_name: str, user_email: str) -> None:
         self.git("config", "user.email", user_email)
         self.git("config", "user.name", user_name)
 
-    def fetch(self, remote_name, remote_url=None):
+    def fetch(self, remote_name: str, remote_url: Optional[str] = None) -> None:
         if remote_name != "origin":
             assert remote_url is not None
             # upsert remote
@@ -64,7 +64,13 @@ class Repo:
             self.git("remote", "add", remote_name, remote_url)
         self.git("fetch", "--prune", remote_name)
 
-    def tag_with_trailer(self, trailer_name, trailer_values, branch, start_commit):
+    def tag_with_trailer(
+        self,
+        trailer_name: str,
+        trailer_values: List[str],
+        branch: str,
+        start_commit: str,
+    ) -> str:
         """Replace `trailer_name` in commit messages with `trailer_values` in `branch` from `start_commit`."""
 
         # Strips all `$trailer_name``: lines and trailing newlines, adds an empty
@@ -90,12 +96,12 @@ class Repo:
 
     def merge(
         self,
-        source_branch,
-        target_branch,
-        *merge_args,
-        source_repo_url=None,
-        local=False,
-    ):
+        source_branch: str,
+        target_branch: str,
+        *merge_args: str,
+        source_repo_url: Optional[str] = None,
+        local: bool = False,
+    ) -> str:
         """Merge `target_branch` into `source_branch` and return the new HEAD commit id.
 
         By default `source_branch` and `target_branch` are assumed to reside in the same
@@ -113,7 +119,13 @@ class Repo:
             local=local,
         )
 
-    def fast_forward(self, source, target, source_repo_url=None, local=False):
+    def fast_forward(
+        self,
+        source: str,
+        target: str,
+        source_repo_url: Optional[str] = None,
+        local: bool = False,
+    ) -> str:
         return self.merge(
             source,
             target,
@@ -123,7 +135,13 @@ class Repo:
             local=local,
         )
 
-    def rebase(self, branch, new_base, source_repo_url=None, local=False):
+    def rebase(
+        self,
+        branch: str,
+        new_base: str,
+        source_repo_url: Optional[str] = None,
+        local: bool = False,
+    ) -> str:
         """Rebase `new_base` into `branch` and return the new HEAD commit id.
 
         By default `branch` and `new_base` are assumed to reside in the same
@@ -138,13 +156,13 @@ class Repo:
 
     def _fuse_branch(
         self,
-        strategy,
-        branch,
-        target_branch,
-        *fuse_args,
-        source_repo_url=None,
-        local=False,
-    ):
+        strategy: str,
+        branch: str,
+        target_branch: str,
+        *fuse_args: Any,
+        source_repo_url: Optional[str] = None,
+        local: bool = False,
+    ) -> str:
         assert source_repo_url or branch != target_branch, branch
 
         if not local:
@@ -167,15 +185,22 @@ class Repo:
             raise
         return self.get_commit_hash()
 
-    def remove_branch(self, branch, *, new_current_branch="master"):
+    def remove_branch(self, branch: str, *, new_current_branch: str = "master") -> None:
         assert branch != new_current_branch
         self.git("branch", "-D", branch)
 
-    def checkout_branch(self, branch, start_point=""):
+    def checkout_branch(self, branch: str, start_point: str = "") -> None:
         create_and_reset = "-B" if start_point else ""
         self.git("checkout", create_and_reset, branch, start_point, "--")
 
-    def push(self, branch, *, source_repo_url=None, force=False, skip_ci=False):
+    def push(
+        self,
+        branch: str,
+        *,
+        source_repo_url: Optional[str] = None,
+        force: bool = False,
+        skip_ci: bool = False,
+    ) -> None:
         self.git("checkout", branch, "--")
 
         self.git("diff-index", "--quiet", "HEAD")  # check it is not dirty
@@ -195,19 +220,21 @@ class Repo:
         skip_flag = ("-o", "ci.skip") if skip_ci else ()
         self.git("push", force_flag, *skip_flag, source, f"{branch}:{branch}")
 
-    def get_commit_hash(self, rev="HEAD"):
+    def get_commit_hash(self, rev: str = "HEAD") -> str:
         """Return commit hash for `rev` (default "HEAD")."""
         result = self.git("rev-parse", rev)
         return result.stdout.decode("ascii").strip()
 
-    def get_remote_url(self, name):
+    def get_remote_url(self, name: str) -> str:
         return (
             self.git("config", "--get", f"remote.{name}.url")
             .stdout.decode("utf-8")
             .strip()
         )
 
-    def git(self, *args, from_repo=True):
+    def git(
+        self, *args: str, from_repo: bool = True
+    ) -> "subprocess.CompletedProcess[bytes]":
         env = None
         if self.ssh_key_file:
             env = os.environ.copy()
@@ -246,16 +273,23 @@ class Repo:
             raise GitError(err) from err
 
 
-def _run(*args, env=None, check=False, timeout=None):
+def _run(
+    *args: Any,
+    env: Optional[Dict[str, str]] = None,
+    check: bool = False,
+    timeout: Optional[float] = None,
+) -> "subprocess.CompletedProcess[bytes]":
     encoded_args = (
         [a.encode("utf-8") for a in args] if sys.platform != "win32" else args
     )
     with subprocess.Popen(encoded_args, env=env, stdout=PIPE, stderr=PIPE) as process:
         try:
-            stdout, stderr = process.communicate(input, timeout=timeout)
+            stdout, stderr = process.communicate(timeout=timeout)
         except TimeoutExpired as err:
             process.kill()
             stdout, stderr = process.communicate()
+            if TYPE_CHECKING:
+                assert isinstance(timeout, float)
             raise TimeoutExpired(
                 process.args,
                 timeout,
@@ -274,7 +308,11 @@ def _run(*args, env=None, check=False, timeout=None):
                 output=stdout,
                 stderr=stderr,
             )
-        return subprocess.CompletedProcess(process.args, retcode, stdout, stderr)
+        if TYPE_CHECKING:
+            assert isinstance(retcode, int)
+        return subprocess.CompletedProcess(
+            args=process.args, returncode=retcode, stdout=stdout, stderr=stderr
+        )
 
 
 class GitError(Exception):

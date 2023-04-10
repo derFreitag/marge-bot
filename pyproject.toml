@@ -54,6 +54,7 @@ warn_unused_ignores = true
 module = [
     "marge.app",
     "marge.approvals",
+    "marge.git",
     "marge.gitlab",
 ]
 # strict = true
