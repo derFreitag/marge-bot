@@ -212,6 +212,10 @@ and keep the private one handy.
 
 ### Running marge-bot in docker using SSH (what we do)
 
+> **Note**: Official, tagged images of the community fork are not yet deployed. You can
+> try out the latest development images at `registry.gitlab.com/marge-org/marge-bot:main`.
+> After the first release, tagged and `:latest` images will also become available.
+
 Assuming you have already got docker installed, the quickest and most minimal
 way to run marge is like so (*but see note about passing secrets on the
 commandline below*):
