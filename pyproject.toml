@@ -53,6 +53,7 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = [
     "marge.app",
+    "marge.gitlab",
 ]
 # strict = true
 check_untyped_defs = true
