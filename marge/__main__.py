@@ -1,9 +1,11 @@
+import sys
+
 from marge.app import main
 
 
-def run():
+def run() -> int:
     try:
-        main()
+        return main()
     except Exception as err:
         print("Exception occured")
         if hasattr(err, "stdout"):
@@ -16,4 +18,4 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    sys.exit(run())
