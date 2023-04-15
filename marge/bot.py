@@ -4,6 +4,7 @@ import logging as log
 import re
 import time
 from tempfile import TemporaryDirectory
+from typing import Optional
 
 from . import batch_job, git, job
 from . import merge_request as merge_request_module
@@ -214,7 +215,7 @@ class BotConfig:
     user: user_module.User
     use_https: bool
     auth_token: str
-    ssh_key_file: str
+    ssh_key_file: Optional[str]
     project_regexp: re.Pattern
     merge_order: str
     merge_opts: job.MergeJobOptions

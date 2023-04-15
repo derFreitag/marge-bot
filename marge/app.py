@@ -2,12 +2,14 @@
 An auto-merger of merge requests for GitLab
 """
 
+import argparse
 import contextlib
+import datetime
 import logging
 import re
 import sys
 import tempfile
-from datetime import timedelta
+from typing import Iterator, List, Optional, Tuple, cast
 
 import configargparse  # type: ignore[import]
 
@@ -19,19 +21,24 @@ class MargeBotCliArgError(Exception):
     pass
 
 
-def time_interval(str_interval):
-    try:
-        quant, unit = re.match(r"\A([\d.]+) ?(h|m(?:in)?|s)?\Z", str_interval).groups()
+def time_interval(str_interval: str) -> datetime.timedelta:
+    re_match = re.match(r"\A([\d.]+) ?(h|m(?:in)?|s)?\Z", str_interval)
+    if re_match:
+        quant, unit = re_match.groups()
+        unit = unit if unit else "s"
         translate = {"h": "hours", "m": "minutes", "min": "minutes", "s": "seconds"}
-        return timedelta(**{translate[unit or "s"]: float(quant)})
-    except (AttributeError, ValueError) as err:
-        raise configargparse.ArgumentTypeError(
-            f"Invalid time interval (e.g. 12[s|min|h]): {str_interval}"
-        ) from err
+        if unit in translate:
+            return datetime.timedelta(**{translate[unit]: float(quant)})
+    raise configargparse.ArgumentTypeError(
+        f"Invalid time interval (e.g. 12[s|min|h]): {str_interval!r}"
+    )
 
 
-def _parse_config(args):  # pylint: disable=too-many-statements
-    def regexp(str_regex):
+def _parse_config(
+    args: List[str],
+) -> argparse.Namespace:
+    # pylint: disable=too-many-statements
+    def regexp(str_regex: str) -> "re.Pattern[str]":
         try:
             return re.compile(str_regex)
         except re.error as err:
@@ -242,7 +249,7 @@ def _parse_config(args):  # pylint: disable=too-many-statements
         help="Guaranteed final pipeline when assigned to marge-bot",
     )
 
-    config = parser.parse_args(args)
+    config = cast(argparse.Namespace, parser.parse_args(args))
 
     if config.use_merge_strategy and config.batch:
         raise MargeBotCliArgError(
@@ -280,7 +287,9 @@ def _parse_config(args):  # pylint: disable=too-many-statements
 
 
 @contextlib.contextmanager
-def _secret_auth_token_and_ssh_key(options):
+def _secret_auth_token_and_ssh_key(
+    options: argparse.Namespace,
+) -> Iterator[Tuple[str, Optional[str]]]:
     auth_token = options.auth_token or options.auth_token_file.readline().strip()
     if options.use_https:
         yield auth_token, None
@@ -298,7 +307,7 @@ def _secret_auth_token_and_ssh_key(options):
                 tmp_ssh_key_file.close()
 
 
-def main(args=None):
+def main(args: Optional[List[str]] = None) -> int:
     if args is None:
         args = sys.argv[1:]
     logging.basicConfig()
@@ -318,7 +327,9 @@ def main(args=None):
                 "--max-ci-time-in-minutes is DEPRECATED, use --ci-timeout %dmin",
                 options.max_ci_time_in_minutes,
             )
-            options.ci_timeout = timedelta(minutes=options.max_ci_time_in_minutes)
+            options.ci_timeout = datetime.timedelta(
+                minutes=options.max_ci_time_in_minutes
+            )
 
         if options.batch:
             logging.warning("Experimental batch mode enabled")
@@ -367,3 +378,4 @@ def main(args=None):
 
         marge_bot = bot.Bot(api=api, config=config)
         marge_bot.start()
+    return 0

@@ -1,3 +1,4 @@
+import argparse
 import contextlib
 import datetime
 import os
@@ -345,13 +346,21 @@ def test_merge_order_assigned():
             assert bot.config.merge_order == "assigned_at"
 
 
-# FIXME: I'd reallly prefer this to be a doctest, but adding --doctest-modules
-# seems to seriously mess up the test run
 def test_time_interval():
     _900s = datetime.timedelta(0, 900)
     assert [app.time_interval(x) for x in ["15min", "15m", ".25h", "900s"]] == [
         _900s
     ] * 4
+    assert app.time_interval("120") == datetime.timedelta(seconds=120)
+
+
+@pytest.mark.parametrize("time_interval", ["120x", "this is not a time"])
+def test_invalid_time_interval(time_interval: str) -> None:
+    with pytest.raises(
+        argparse.ArgumentTypeError,
+        match=rf"Invalid time interval .*: {time_interval!r}",
+    ):
+        assert app.time_interval(time_interval)
 
 
 def test_disabled_auth_token_cli_arg():
