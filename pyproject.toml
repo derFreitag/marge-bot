@@ -68,6 +68,7 @@ module = [
     "marge.pipeline",
     "marge.project",
     "marge.single_merge_job",
+    "marge.store",
     "marge.user",
 ]
 # strict = true
