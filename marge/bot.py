@@ -185,7 +185,7 @@ class Bot:
                 return
             except batch_job.CannotBatch as err:
                 log.warning("BatchMergeJob aborted: %s", err)
-            except batch_job.CannotMerge as err:
+            except job.CannotMerge as err:
                 log.warning("BatchMergeJob failed: %s", err)
                 return
             except git.GitError as err:
