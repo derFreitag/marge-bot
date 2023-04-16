@@ -267,7 +267,7 @@ class MergeJob:
     def unassign_from_mr(self, merge_request: MergeRequest) -> None:
         log.info("Unassigning from MR !%s", merge_request.iid)
         author_id = merge_request.author_id
-        if author_id != self._user.id:
+        if author_id is not None and author_id != self._user.id:
             merge_request.assign_to(author_id)
         else:
             merge_request.unassign()

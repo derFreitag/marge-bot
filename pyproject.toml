@@ -62,6 +62,7 @@ module = [
     "marge.gitlab",
     "marge.interval",
     "marge.job",
+    "marge.merge_request",
     "marge.pipeline",
     "marge.project",
     "marge.user",

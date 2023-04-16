@@ -315,7 +315,7 @@ class TestMergeRequest:
 
         def side_effect(request):
             if request.endpoint == "/projects/1234/merge_requests/54/pipelines":
-                raise BadRequest(400, {"message": {"base": NO_JOBS_MESSAGE}})
+                raise BadRequest(400, {"message": NO_JOBS_MESSAGE})
             if request.endpoint == "/projects/1234/pipeline?ref=useless_new_feature":
                 return expected_result
             return None
@@ -336,7 +336,7 @@ class TestMergeRequest:
 
         def side_effect(request):
             if request.endpoint == "/projects/1234/merge_requests/54/pipelines":
-                raise BadRequest(500, {"message": {"base": "Another error."}})
+                raise BadRequest(500, {"message": "Another error."})
 
         api.call = Mock(side_effect=side_effect)
 
