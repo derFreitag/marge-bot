@@ -62,6 +62,7 @@ module = [
     "marge.gitlab",
     "marge.job",
     "marge.pipeline",
+    "marge.project",
     "marge.user",
 ]
 # strict = true
