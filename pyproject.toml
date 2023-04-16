@@ -60,6 +60,7 @@ module = [
     "marge.commit",
     "marge.git",
     "marge.gitlab",
+    "marge.interval",
     "marge.job",
     "marge.pipeline",
     "marge.project",
