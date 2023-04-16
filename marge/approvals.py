@@ -29,6 +29,10 @@ class Approvals(gitlab.Resource):
         self._info = info
 
     @property
+    def id(self) -> int:
+        raise NotImplementedError()
+
+    @property
     def iid(self) -> int:
         return cast(int, self.info["iid"])
 

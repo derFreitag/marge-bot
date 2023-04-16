@@ -90,6 +90,13 @@ class Project(gitlab.Resource):
         return projects
 
     @property
+    def id(self) -> int:
+        result = self._info["id"]
+        if TYPE_CHECKING:
+            assert isinstance(result, int)
+        return result
+
+    @property
     def default_branch(self) -> str:
         result = self.info["default_branch"]
         if TYPE_CHECKING:

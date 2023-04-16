@@ -12,6 +12,7 @@ NO_JOBS_MESSAGE = "No stages / jobs for this pipeline."
 
 
 class MergeRequest(gitlab.Resource):
+    # pylint: disable=too-many-public-methods
     @classmethod
     def create(
         cls, api: gitlab.Api, project_id: int, params: Dict[str, Any]
@@ -112,6 +113,13 @@ class MergeRequest(gitlab.Resource):
             cls(api, merge_request_info)
             for merge_request_info in my_merge_request_infos
         ]
+
+    @property
+    def id(self) -> int:
+        result = self._info["id"]
+        if TYPE_CHECKING:
+            assert isinstance(result, int)
+        return result
 
     @property
     def project_id(self) -> int:
