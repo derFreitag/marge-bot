@@ -65,6 +65,7 @@ module = [
     "marge.merge_request",
     "marge.pipeline",
     "marge.project",
+    "marge.single_merge_job",
     "marge.user",
 ]
 # strict = true

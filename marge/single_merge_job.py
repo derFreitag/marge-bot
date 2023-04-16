@@ -1,22 +1,35 @@
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+import datetime
 import logging as log
 import time
-from datetime import datetime
 
+from . import approvals as mb_approvals
 from . import git, gitlab
+from . import job as mb_job
+from . import merge_request as mb_merge_request
+from . import project as mb_project
+from . import user as mb_user
 from .commit import Commit
-from .job import CannotMerge, GitLabRebaseResultMismatch, MergeJob, SkipMerge
 
 
-class SingleMergeJob(MergeJob):
-    def __init__(self, *, api, user, project, repo, options, merge_request):
+class SingleMergeJob(mb_job.MergeJob):
+    def __init__(
+        self,
+        *,
+        api: gitlab.Api,
+        user: mb_user.User,
+        project: mb_project.Project,
+        repo: git.Repo,
+        options: mb_job.MergeJobOptions,
+        merge_request: mb_merge_request.MergeRequest,
+    ):
         super().__init__(
             api=api, user=user, project=project, repo=repo, options=options
         )
         self._merge_request = merge_request
         self._options = options
 
-    def execute(self):
+    def execute(self) -> None:
         merge_request = self._merge_request
 
         log.info("Processing !%s - %r", merge_request.iid, merge_request.title)
@@ -25,9 +38,9 @@ class SingleMergeJob(MergeJob):
             approvals = merge_request.fetch_approvals()
             self.update_merge_request_and_accept(approvals)
             log.info("Successfully merged !%s.", merge_request.info["iid"])
-        except SkipMerge as err:
+        except mb_job.SkipMerge as err:
             log.warning("Skipping MR !%s: %s", merge_request.info["iid"], err.reason)
-        except CannotMerge as err:
+        except mb_job.CannotMerge as err:
             message = f"I couldn't merge this branch: {err.reason}"
             log.warning(message)
             self.unassign_from_mr(merge_request)
@@ -46,7 +59,9 @@ class SingleMergeJob(MergeJob):
             self.unassign_from_mr(merge_request)
             raise
 
-    def update_merge_request_and_accept(self, approvals):
+    def update_merge_request_and_accept(
+        self, approvals: mb_approvals.Approvals
+    ) -> None:
         api = self._api
         merge_request = self._merge_request
         updated_into_up_to_date_target_branch = False
@@ -68,7 +83,7 @@ class SingleMergeJob(MergeJob):
                     merge_request,
                     source_repo_url=source_repo_url,
                 )
-            except GitLabRebaseResultMismatch as err:
+            except mb_job.GitLabRebaseResultMismatch as err:
                 log.info("Gitlab rebase didn't give expected result: %s", err.reason)
                 merge_request.comment(
                     "Someone skipped the queue! Will have to try again..."
@@ -99,7 +114,7 @@ class SingleMergeJob(MergeJob):
             # meantime, because we're about to impersonate the approvers, and
             # we don't want to approve unreviewed commits
             if sha_now != actual_sha:
-                raise CannotMerge(
+                raise mb_job.CannotMerge(
                     "Someone pushed to branch while we were trying to merge"
                 )
 
@@ -137,12 +152,14 @@ class SingleMergeJob(MergeJob):
                 # unexpected went wrong in either case, we expect the user to
                 # explicitly re-assign to marge (after resolving potential
                 # problems)
-                raise CannotMerge(
+                raise mb_job.CannotMerge(
                     f"Merge request was rejected by GitLab: {err.error_message!r}"
                 ) from err
             except gitlab.Unauthorized as err:
                 log.warning("Unauthorized!")
-                raise CannotMerge("My user cannot accept merge requests!") from err
+                raise mb_job.CannotMerge(
+                    "My user cannot accept merge requests!"
+                ) from err
             except gitlab.NotFound as ex:
                 log.warning("Not Found!: %s", ex)
                 merge_request.refetch_info()
@@ -160,16 +177,16 @@ class SingleMergeJob(MergeJob):
                 log.warning("Not Allowed!: %s", ex)
                 merge_request.refetch_info()
                 if merge_request.draft:
-                    raise CannotMerge(
+                    raise mb_job.CannotMerge(
                         "The request was marked as Draft as I was processing it (maybe a Draft commit?)"
                     ) from ex
                 if merge_request.state == "reopened":
-                    raise CannotMerge(
+                    raise mb_job.CannotMerge(
                         "GitLab refused to merge this branch. I suspect that a Push Rule or a git-hook "
                         "is rejecting my commits; maybe my email needs to be white-listed?"
                     ) from ex
                 if merge_request.state == "closed":
-                    raise CannotMerge(
+                    raise mb_job.CannotMerge(
                         "Someone closed the merge request while I was attempting to merge it."
                     ) from ex
                 if merge_request.state == "merged":
@@ -178,7 +195,7 @@ class SingleMergeJob(MergeJob):
                     log.info("Merge request is already merged, someone was faster!")
                     updated_into_up_to_date_target_branch = True
                 else:
-                    raise CannotMerge(
+                    raise mb_job.CannotMerge(
                         "Gitlab refused to merge this request and I don't know why!"
                         + (
                             " Maybe you have unresolved discussions?"
@@ -188,25 +205,27 @@ class SingleMergeJob(MergeJob):
                     ) from ex
             except gitlab.ApiError as err:
                 log.exception("Unanticipated ApiError from GitLab on merge attempt")
-                raise CannotMerge(
+                raise mb_job.CannotMerge(
                     "had some issue with GitLab, check my logs..."
                 ) from err
             else:
                 self.wait_for_branch_to_be_merged()
                 updated_into_up_to_date_target_branch = True
 
-    def wait_for_branch_to_be_merged(self):
+    def wait_for_branch_to_be_merged(self) -> None:
         merge_request = self._merge_request
-        time_0 = datetime.utcnow()
+        time_0 = datetime.datetime.utcnow()
         waiting_time_in_secs = 10
 
-        while datetime.utcnow() - time_0 < self._merge_timeout:
+        while datetime.datetime.utcnow() - time_0 < self._merge_timeout:
             merge_request.refetch_info()
 
             if merge_request.state == "merged":
                 return  # success!
             if merge_request.state == "closed":
-                raise CannotMerge("someone closed the merge request while merging!")
+                raise mb_job.CannotMerge(
+                    "someone closed the merge request while merging!"
+                )
             assert merge_request.state in (
                 "opened",
                 "reopened",
@@ -220,4 +239,6 @@ class SingleMergeJob(MergeJob):
             )
             time.sleep(waiting_time_in_secs)
 
-        raise CannotMerge("It is taking too long to see the request marked as merged!")
+        raise mb_job.CannotMerge(
+            "It is taking too long to see the request marked as merged!"
+        )
