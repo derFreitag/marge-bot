@@ -1,7 +1,8 @@
+import datetime
 import operator
 from enum import Enum, unique
 
-import maya
+import maya  # type: ignore[import]
 
 
 # pylint: disable=invalid-name
@@ -18,7 +19,6 @@ class WeekDay(Enum):
 
 _DAY_NAMES = {day.name.lower(): day for day in WeekDay}
 _DAY_NAMES.update((day.name.lower()[:3], day) for day in WeekDay)
-_DAY_NAMES.update((day, day) for day in WeekDay)
 
 
 def find_weekday(string_or_day):
@@ -139,5 +139,5 @@ class IntervalUnion:
         strings = string.split(",")
         return cls(WeeklyInterval.from_human(s) for s in strings)
 
-    def covers(self, date):
+    def covers(self, date: datetime.datetime) -> bool:
         return any(interval.covers(date) for interval in self._intervals)

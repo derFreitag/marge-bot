@@ -1,17 +1,40 @@
+import abc
 import dataclasses
 import json
 import logging as log
-from typing import Any, Callable, Dict, Optional
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    Union,
+    cast,
+)
 
 import requests
 
 
+class RequestsMethod(Protocol):
+    # pylint: disable=too-few-public-methods
+
+    __name__: str
+
+    def __call__(self, urls: str, **kwargs: Any) -> requests.Response:
+        ...
+
+
 class Api:
-    def __init__(self, gitlab_url, auth_token):
+    def __init__(self, gitlab_url: str, auth_token: str) -> None:
         self._auth_token = auth_token
         self._api_base_url = gitlab_url.rstrip("/") + "/api/v4"
 
-    def call(self, command, sudo=None):
+    def call(
+        self, command: "Command", sudo: Optional[int] = None
+    ) -> Union[bool, Dict[str, Any], List[Dict[str, Any]]]:
         method = command.method
         url = self._api_base_url + command.endpoint
         headers = {"PRIVATE-TOKEN": self._auth_token}
@@ -61,7 +84,7 @@ class Api:
             500: InternalServerError,
         }
 
-        def other_error(code, msg):
+        def other_error(code: int, msg: Union[str, Dict[str, Any]]) -> Exception:
             exception = InternalServerError if 500 < code < 600 else UnexpectedError
             return exception(code, msg)
 
@@ -73,12 +96,14 @@ class Api:
 
         raise error(response.status_code, err_message)
 
-    def collect_all_pages(self, get_command):
-        result = []
+    def collect_all_pages(self, get_command: "GET") -> List[Dict[str, Any]]:
+        result: List[Dict[str, Any]] = []
         fetch_again, page_no = True, 1
         while fetch_again:
             page = self.call(get_command.for_page(page_no))
             if page:
+                if TYPE_CHECKING:
+                    assert isinstance(page, list)
                 result.extend(page)
                 page_no += 1
             else:
@@ -86,69 +111,78 @@ class Api:
 
         return result
 
-    def version(self):
+    def version(self) -> "Version":
         response = self.call(GET("/version"))
+        if TYPE_CHECKING:
+            assert isinstance(response, dict)
         return Version.parse(response["version"])
 
 
-def from_singleton_list(fun=None):
-    fun = fun or (lambda x: x)
-
-    def extractor(response_list):
+def from_singleton_list(
+    fun: Optional[Callable[[Dict[str, Any]], Any]] = None
+) -> Callable[[List[Dict[str, Any]]], Any]:
+    def extractor(response_list: List[Dict[str, Any]]) -> Any:
         assert isinstance(response_list, list), type(response_list)
         assert len(response_list) <= 1, len(response_list)
         if not response_list:
             return None
+        if fun is None:
+            return response_list[0]
         return fun(response_list[0])
 
     return extractor
 
 
 @dataclasses.dataclass(frozen=True)
-class Command:
+class Command(abc.ABC):
     endpoint: str
     args: Dict[str, Any] = dataclasses.field(default_factory=dict)
-    extract: Optional[Callable] = None
+    extract: Optional[Callable[[List[Dict[str, Any]]], Dict[str, Any]]] = None
 
     @property
-    def call_args(self):
+    @abc.abstractmethod
+    def method(self) -> RequestsMethod:
+        ...
+
+    @property
+    def call_args(self) -> Dict[str, Dict[str, Any]]:
         return {"json": self.args}
 
 
 class GET(Command):
     @property
-    def method(self):
-        return requests.get
+    def method(self) -> RequestsMethod:
+        return cast(RequestsMethod, requests.get)
 
     @property
-    def call_args(self):
+    def call_args(self) -> Dict[str, Dict[str, str]]:
         return {"params": _prepare_params(self.args)}
 
-    def for_page(self, page_no):
+    def for_page(self, page_no: int) -> "GET":
         args = self.args
         return dataclasses.replace(self, args=dict(args, page=page_no, per_page=100))
 
 
 class PUT(Command):
     @property
-    def method(self):
-        return requests.put
+    def method(self) -> RequestsMethod:
+        return cast(RequestsMethod, requests.put)
 
 
 class POST(Command):
     @property
-    def method(self):
-        return requests.post
+    def method(self) -> RequestsMethod:
+        return cast(RequestsMethod, requests.post)
 
 
 class DELETE(Command):
     @property
-    def method(self):
-        return requests.delete
+    def method(self) -> RequestsMethod:
+        return cast(RequestsMethod, requests.delete)
 
 
-def _prepare_params(params):
-    def process(val):
+def _prepare_params(params: Dict[str, Any]) -> Dict[str, str]:
+    def process(val: Any) -> str:
         if isinstance(val, bool):
             return "true" if val else "false"
         return str(val)
@@ -158,7 +192,7 @@ def _prepare_params(params):
 
 class ApiError(Exception):
     @property
-    def error_message(self):
+    def error_message(self) -> Optional[str]:
         args = self.args
         if len(args) != 2:
             return None
@@ -166,6 +200,8 @@ class ApiError(Exception):
         arg = args[1]
         if isinstance(arg, dict):
             return arg.get("message")
+        if TYPE_CHECKING:
+            assert isinstance(arg, str)
         return arg
 
 
@@ -210,33 +246,33 @@ class UnexpectedError(ApiError):
 
 
 class Resource:
-    def __init__(self, api, info):
+    def __init__(self, api: Api, info: Dict[str, Any]):
         self._info = info
         self._api = api
 
     @property
-    def info(self):
+    def info(self) -> Dict[str, Any]:
         return self._info
 
     @property
-    def id(self):  # pylint: disable=invalid-name
-        return self.info["id"]
+    def id(self) -> int:  # pylint: disable=invalid-name
+        return cast(int, self.info["id"])
 
     @property
-    def api(self):
+    def api(self) -> Api:
         return self._api
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._api}, {self.info})"
 
 
 @dataclasses.dataclass
 class Version:
-    release: str
-    edition: str
+    release: Tuple[int, ...]
+    edition: Optional[str]
 
     @classmethod
-    def parse(cls, string):
+    def parse(cls, string: str) -> "Version":
         maybe_split_string = string.split("-", maxsplit=1)
         if len(maybe_split_string) == 2:
             release_string, edition = maybe_split_string
@@ -247,8 +283,8 @@ class Version:
         return cls(release=release, edition=edition)
 
     @property
-    def is_ee(self):
+    def is_ee(self) -> bool:
         return self.edition == "ee"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{'.'.join(map(str, self.release))}-{self.edition}"

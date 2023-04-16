@@ -1,6 +1,6 @@
 from datetime import time
 
-import maya
+import maya  # type: ignore[import]
 import pendulum
 from pendulum.helpers import set_test_now
 
