@@ -57,6 +57,7 @@ module = [
     "marge.app",
     "marge.approvals",
     "marge.batch_job",
+    "marge.bot",
     "marge.branch",
     "marge.commit",
     "marge.git",

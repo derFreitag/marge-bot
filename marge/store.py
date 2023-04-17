@@ -1,10 +1,11 @@
+import abc
 import re
 import tempfile
 
 from . import git
 
 
-class RepoManager:
+class RepoManager(abc.ABC):
     def __init__(self, user, root_dir, timeout=None, reference=None):
         self._root_dir = root_dir
         self._user = user
@@ -14,6 +15,10 @@ class RepoManager:
 
     def forget_repo(self, project):
         self._repos.pop(project.id, None)
+
+    @abc.abstractmethod
+    def repo_for_project(self, project):
+        ...
 
     @property
     def user(self):
