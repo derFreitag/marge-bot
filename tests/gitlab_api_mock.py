@@ -278,7 +278,7 @@ class List:
     prefix: str
     api: Api
 
-    def _call__(self):
+    def __call__(self):
         candidates = (
             command
             for command, _ in self.api._transitions  # pylint: disable=protected-access
