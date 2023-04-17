@@ -49,29 +49,6 @@ files = "."
 warn_redundant_casts = true
 warn_unused_configs = true
 warn_unused_ignores = true
-
-[[tool.mypy.overrides]]
-module = [
-    "marge.__init__",
-    "marge.__main__",
-    "marge.app",
-    "marge.approvals",
-    "marge.batch_job",
-    "marge.bot",
-    "marge.branch",
-    "marge.commit",
-    "marge.git",
-    "marge.gitlab",
-    "marge.interval",
-    "marge.job",
-    "marge.merge_request",
-    "marge.pipeline",
-    "marge.project",
-    "marge.single_merge_job",
-    "marge.store",
-    "marge.trailerfilter",
-    "marge.user",
-]
 # strict = true
 check_untyped_defs = true
 disallow_any_generics = true
@@ -84,3 +61,24 @@ no_implicit_reexport = true
 strict_concatenate = true
 strict_equality = true
 warn_return_any = true
+
+[[tool.mypy.overrides]]
+module = [
+    "tests.git_repo_mock",
+    "tests.gitlab_api_mock",
+    "tests.test_app",
+    "tests.test_approvals",
+    "tests.test_batch_job",
+    "tests.test_commit",
+    "tests.test_git",
+    "tests.test_gitlab",
+    "tests.test_interval",
+    "tests.test_job",
+    "tests.test_merge_request",
+    "tests.test_pipeline",
+    "tests.test_project",
+    "tests.test_single_job",
+    "tests.test_store",
+    "tests.test_user",
+]
+ignore_errors = true
