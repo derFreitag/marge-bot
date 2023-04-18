@@ -61,7 +61,8 @@ docker-build:
       variables:
         # only test the build on MRs
         KANIKO_EXTRA_ARGS: --no-push
-    - variables:
+    - if: '$CI_COMMIT_BRANCH || $CI_COMMIT_TAG'
+      variables:
         # otherwise, push as `:main` or `:<tag>`
         KANIKO_EXTRA_ARGS: --destination ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_NAME}
 
