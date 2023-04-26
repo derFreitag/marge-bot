@@ -66,7 +66,7 @@ class TestJob:
             merge_job._api.version.return_value = marge.gitlab.Version.parse(version)
             merge_request = self._mock_merge_request(sha="abc")
 
-            r_ci_status = merge_job.get_mr_ci_status(merge_request)
+            r_ci_status, _ = merge_job.get_mr_ci_status(merge_request)
 
             if use_merge_request_pipelines:
                 pipeline_class.pipelines_by_merge_request.assert_called_once_with(

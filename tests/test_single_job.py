@@ -50,6 +50,7 @@ def _pipeline(sha1, status, ref="useless_new_feature"):
         "status": status,
         "ref": ref,
         "sha": sha1,
+        "web_url": "https://link/pipelines/87",
     }
 
 
@@ -478,7 +479,8 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
             to_state="failed",
         )
 
-        with mocks.mocklab.expected_failure("CI failed!"):
+        expected_message = "CI failed! See pipeline https://link/pipelines/87."
+        with mocks.mocklab.expected_failure(expected_message):
             mocks.job.execute()
 
         assert mocks.api.state == "failed"
@@ -506,7 +508,10 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
             to_state="canceled",
         )
 
-        with mocks.mocklab.expected_failure("Someone canceled the CI."):
+        expected_message = (
+            "Someone canceled the CI. See pipeline https://link/pipelines/87."
+        )
+        with mocks.mocklab.expected_failure(expected_message):
             mocks.job.execute()
 
         assert mocks.api.state == "canceled"

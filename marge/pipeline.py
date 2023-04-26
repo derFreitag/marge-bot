@@ -74,6 +74,10 @@ class Pipeline(gitlab.Resource):
     def sha(self):
         return self.info["sha"]
 
+    @property
+    def web_url(self):
+        return self.info["web_url"]
+
     def cancel(self):
         return self._api.call(
             POST(

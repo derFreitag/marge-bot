@@ -150,7 +150,7 @@ class MergeJob:
 
     def get_mr_ci_status(
         self, merge_request: MergeRequest, commit_sha: Optional[str] = None
-    ) -> Optional[str]:
+    ) -> Tuple[Optional[str], Optional[str]]:
         if commit_sha is None:
             commit_sha = merge_request.sha
 
@@ -172,6 +172,7 @@ class MergeJob:
 
         if current_pipeline:
             ci_status = current_pipeline.status
+            pipeline_msg = f"See pipeline {current_pipeline.web_url}."
         else:
             log.warning(
                 "No pipeline listed for %s on branch %s",
@@ -179,8 +180,9 @@ class MergeJob:
                 merge_request.source_branch,
             )
             ci_status = None
+            pipeline_msg = "No pipeline associated."
 
-        return ci_status
+        return ci_status, pipeline_msg
 
     def wait_for_ci_to_pass(
         self, merge_request: MergeRequest, commit_sha: Optional[str] = None
@@ -195,23 +197,25 @@ class MergeJob:
         if TYPE_CHECKING:
             assert self._options.ci_timeout is not None
         while datetime.datetime.utcnow() - time_0 < self._options.ci_timeout:
-            ci_status = self.get_mr_ci_status(merge_request, commit_sha=commit_sha)
+            ci_status, pipeline_msg = self.get_mr_ci_status(
+                merge_request, commit_sha=commit_sha
+            )
             if ci_status == "success":
-                log.info("CI for MR !%s passed", merge_request.iid)
+                log.info("CI for MR !%s passed. %s", merge_request.iid, pipeline_msg)
                 return
 
             if ci_status == "skipped":
-                log.info("CI for MR !%s skipped", merge_request.iid)
+                log.info("CI for MR !%s skipped. %s", merge_request.iid, pipeline_msg)
                 return
 
             if ci_status == "failed":
-                raise CannotMerge("CI failed!")
+                raise CannotMerge(f"CI failed! {pipeline_msg}")
 
             if ci_status == "canceled":
-                raise CannotMerge("Someone canceled the CI.")
+                raise CannotMerge(f"Someone canceled the CI. {pipeline_msg}")
 
             if ci_status not in ("pending", "running"):
-                log.warning("Suspicious CI status: %r", ci_status)
+                log.warning("Suspicious CI status: %r. %s", ci_status, pipeline_msg)
 
             log.debug(
                 "Waiting for %s secs before polling CI status again",
@@ -219,7 +223,7 @@ class MergeJob:
             )
             time.sleep(waiting_time_in_secs)
 
-        raise CannotMerge("CI is taking too long.")
+        raise CannotMerge(f"CI is taking too long. {pipeline_msg}")
 
     def wait_for_merge_status_to_resolve(self, merge_request: MergeRequest) -> None:
         """

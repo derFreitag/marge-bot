@@ -8,6 +8,7 @@ INFO = {
     "status": "pending",
     "ref": "new-pipeline",
     "sha": "a91957a858320c0e17f3a0eca7cfacbff50ea29a",
+    "web_url": "https://link/pipelines/87",
 }
 
 
@@ -54,3 +55,4 @@ class TestPipeline:
         assert pipeline.status == "pending"
         assert pipeline.ref == "new-pipeline"
         assert pipeline.sha == "a91957a858320c0e17f3a0eca7cfacbff50ea29a"
+        assert pipeline.web_url == "https://link/pipelines/87"
