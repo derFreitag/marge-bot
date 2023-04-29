@@ -3,8 +3,8 @@ from unittest.mock import Mock, call
 import pytest
 
 import marge.user
-from marge.gitlab import GET, POST, PUT, Api, Version
-from marge.merge_request import MergeRequest, MergeRequestRebaseFailed
+from marge.gitlab import GET, POST, PUT, Api, BadRequest, Version
+from marge.merge_request import NO_JOBS_MESSAGE, MergeRequest, MergeRequestRebaseFailed
 from tests.test_user import INFO as USER_INFO
 
 _MARGE_ID = 77
@@ -253,6 +253,63 @@ class TestMergeRequest:
             )
         )
         assert result == 1597733578.093
+
+    def test_trigger_pipeline_succeeds(self):
+        api = self.api
+        expected_result = object()
+
+        def side_effect(request):
+            if request.endpoint == "/projects/1234/merge_requests/54/pipelines":
+                return expected_result
+            return None
+
+        api.call = Mock(side_effect=side_effect)
+
+        result = self.merge_request.trigger_pipeline()
+
+        assert api.call.call_args_list == [
+            call(POST("/projects/1234/merge_requests/54/pipelines")),
+        ]
+
+        assert result == expected_result
+
+    def test_trigger_pipeline_fallback_succeeds(self):
+        api = self.api
+        expected_result = object()
+
+        def side_effect(request):
+            if request.endpoint == "/projects/1234/merge_requests/54/pipelines":
+                raise BadRequest(400, {"message": {"base": NO_JOBS_MESSAGE}})
+            if request.endpoint == "/projects/1234/pipeline?ref=useless_new_feature":
+                return expected_result
+            return None
+
+        api.call = Mock(side_effect=side_effect)
+
+        result = self.merge_request.trigger_pipeline()
+
+        assert api.call.call_args_list == [
+            call(POST("/projects/1234/merge_requests/54/pipelines")),
+            call(POST("/projects/1234/pipeline?ref=useless_new_feature")),
+        ]
+
+        assert result == expected_result
+
+    def test_trigger_pipeline_fallback_fails(self):
+        api = self.api
+
+        def side_effect(request):
+            if request.endpoint == "/projects/1234/merge_requests/54/pipelines":
+                raise BadRequest(500, {"message": {"base": "Another error."}})
+
+        api.call = Mock(side_effect=side_effect)
+
+        with pytest.raises(BadRequest):
+            self.merge_request.trigger_pipeline()
+
+        assert api.call.call_args_list == [
+            call(POST("/projects/1234/merge_requests/54/pipelines")),
+        ]
 
     def _load(self, json):
         old_mock = self.api.call

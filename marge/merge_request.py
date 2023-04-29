@@ -7,6 +7,7 @@ from . import gitlab
 from .approvals import Approvals
 
 GET, POST, PUT, DELETE = gitlab.GET, gitlab.POST, gitlab.PUT, gitlab.DELETE
+NO_JOBS_MESSAGE = "No stages / jobs for this pipeline."
 
 
 class MergeRequest(gitlab.Resource):
@@ -270,6 +271,32 @@ class MergeRequest(gitlab.Resource):
         return self._api.call(
             GET(f"/projects/{self.project_id}/merge_requests/{self.iid}/commits")
         )
+
+    def trigger_pipeline(self):
+        """
+        Triggers a pipeline for the merge request.
+
+        At first, try to trigger a merge request pipeline, which is different
+        from a normal Gitlab CI pipeline and should be configured[0].
+        If this fails due to unavailable merge request job definitions, trigger
+        a normal pipeline for the source branch.
+
+        [0]: https://docs.gitlab.com/ee/ci/pipelines/merge_request_pipelines.html
+        """
+        try:
+            return self._api.call(
+                POST(f"/projects/{self.project_id}/merge_requests/{self.iid}/pipelines")
+            )
+        except gitlab.BadRequest as exc:
+            if NO_JOBS_MESSAGE not in exc.error_message.get("base", []):
+                raise
+
+            log.info(
+                "The pipeline is not configured for MR jobs, triggering a usual pipeline."
+            )
+            return self._api.call(
+                POST(f"/projects/{self.project_id}/pipeline?ref={self.source_branch}")
+            )
 
 
 class MergeRequestRebaseFailed(Exception):
