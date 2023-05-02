@@ -6,6 +6,7 @@ ENV/
 *.egg-info
 .coverage
 .pytest_cache
+.tox/
 /MANIFEST
 /build/
 /dist/
