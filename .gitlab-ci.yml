@@ -40,7 +40,7 @@ lint:
   image: python:3.11
   script:
     - pip install tox
-    - tox -e flake8,pylint
+    - tox -e flake8,mypy,pylint
     - tox -e black,isort -- --check
 
 docker-build:
