@@ -130,7 +130,7 @@ class TestBatchJob:
     @patch.object(BatchMergeJob, "get_mr_ci_status")
     def test_ensure_mergeable_mr_ci_not_ok(self, bmj_get_mr_ci_status, api, mocklab):
         batch_merge_job = self.get_batch_merge_job(api, mocklab)
-        bmj_get_mr_ci_status.return_value = "failed"
+        bmj_get_mr_ci_status.return_value = "failed", "See pipeline http://link/."
         merge_request = self._mock_merge_request(
             assignee_ids=[batch_merge_job._user.id],
             state="opened",
@@ -141,7 +141,10 @@ class TestBatchJob:
         with pytest.raises(CannotBatch) as exc_info:
             batch_merge_job.ensure_mergeable_mr(merge_request)
 
-        assert str(exc_info.value) == "This MR has not passed CI."
+        assert (
+            str(exc_info.value)
+            == "This MR has not passed CI. See pipeline http://link/."
+        )
 
     def test_push_batch(self, api, mocklab):
         batch_merge_job = self.get_batch_merge_job(api, mocklab)
