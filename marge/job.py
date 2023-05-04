@@ -138,7 +138,7 @@ class MergeJob:
             self._options.add_part_of
             and self._options.fusion is not Fusion.gitlab_rebase
         )
-        part_of = "<f{merge_request.web_url}>" if should_add_parts_of else None
+        part_of = f"<{merge_request.web_url}>" if should_add_parts_of else None
         if part_of is not None:
             sha = self._repo.tag_with_trailer(
                 trailer_name="Part-of",
