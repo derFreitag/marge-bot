@@ -159,9 +159,9 @@ class SingleMergeJob(MergeJob):
             except gitlab.MethodNotAllowed as ex:
                 log.warning("Not Allowed!: %s", ex)
                 merge_request.refetch_info()
-                if merge_request.work_in_progress:
+                if merge_request.draft:
                     raise CannotMerge(
-                        "The request was marked as WIP as I was processing it (maybe a WIP commit?)"
+                        "The request was marked as Draft as I was processing it (maybe a Draft commit?)"
                     ) from ex
                 if merge_request.state == "reopened":
                     raise CannotMerge(

@@ -768,7 +768,7 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         mocks.job.execute()
         assert mocks.api.state == "merged"
 
-    def test_handles_request_becoming_wip_after_push(self, mocks):
+    def test_handles_request_becoming_draft_after_push(self, mocks):
         rewritten_sha = mocks.mocklab.rewritten_sha
         mocks.api.add_transition(
             PUT(
@@ -786,18 +786,16 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
                 )
             ),
             from_state="passed",
-            to_state="now_is_wip",
+            to_state="now_is_draft",
         )
         mocks.api.add_merge_request(
-            dict(mocks.mocklab.merge_request_info, work_in_progress=True),
-            from_state="now_is_wip",
+            dict(mocks.mocklab.merge_request_info, draft=True),
+            from_state="now_is_draft",
         )
-        message = (
-            "The request was marked as WIP as I was processing it (maybe a WIP commit?)"
-        )
+        message = "The request was marked as Draft as I was processing it (maybe a Draft commit?)"
         with mocks.mocklab.expected_failure(message):
             mocks.job.execute()
-        assert mocks.api.state == "now_is_wip"
+        assert mocks.api.state == "now_is_draft"
         assert mocks.api.notes == [f"I couldn't merge this branch: {message}"]
 
     def test_guesses_git_hook_error_on_merge_refusal(self, mocks):
@@ -926,20 +924,18 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
         assert mocks.api.state == "rejected_for_mysterious_reasons"
         assert mocks.api.notes == [f"I couldn't merge this branch: {message}"]
 
-    def test_wont_merge_wip_stuff(self, mocks):
-        wip_merge_request = dict(
-            mocks.mocklab.merge_request_info, work_in_progress=True
-        )
-        mocks.api.add_merge_request(wip_merge_request, from_state="initial")
+    def test_wont_merge_draft_stuff(self, mocks):
+        draft_merge_request = dict(mocks.mocklab.merge_request_info, draft=True)
+        mocks.api.add_merge_request(draft_merge_request, from_state="initial")
 
         with mocks.mocklab.expected_failure(
-            "Sorry, I can't merge requests marked as Work-In-Progress!"
+            "Sorry, I can't merge requests marked as Draft!"
         ):
             mocks.job.execute()
 
         assert mocks.api.state == "initial"
         assert mocks.api.notes == [
-            "I couldn't merge this branch: Sorry, I can't merge requests marked as Work-In-Progress!",
+            "I couldn't merge this branch: Sorry, I can't merge requests marked as Draft!",
         ]
 
     def test_wont_merge_branches_with_autosquash_if_rewriting(self, mocks):

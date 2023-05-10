@@ -86,7 +86,7 @@ class TestJob:
         merge_job = self.get_merge_job()
         merge_request = self._mock_merge_request(
             state="opened",
-            work_in_progress=False,
+            draft=False,
             squash=False,
         )
         with pytest.raises(SkipMerge) as exc_info:
@@ -98,7 +98,7 @@ class TestJob:
         merge_request = self._mock_merge_request(
             assignee_ids=[merge_job._user.id],
             state="merged",
-            work_in_progress=False,
+            draft=False,
             squash=False,
         )
         with pytest.raises(CannotMerge) as exc_info:
@@ -110,7 +110,7 @@ class TestJob:
         merge_request = self._mock_merge_request(
             assignee_ids=[merge_job._user.id],
             state="opened",
-            work_in_progress=False,
+            draft=False,
             squash=False,
         )
         merge_request.fetch_approvals.return_value.sufficient = False
@@ -120,28 +120,25 @@ class TestJob:
         merge_request.fetch_approvals.assert_called_once()
         assert "Insufficient approvals" in str(exc_info.value)
 
-    def test_ensure_mergeable_mr_wip(self):
+    def test_ensure_mergeable_mr_draft(self):
         merge_job = self.get_merge_job()
         merge_request = self._mock_merge_request(
             assignee_ids=[merge_job._user.id],
             state="opened",
-            work_in_progress=True,
+            draft=True,
         )
         merge_request.fetch_approvals.return_value.sufficient = True
         with pytest.raises(CannotMerge) as exc_info:
             merge_job.ensure_mergeable_mr(merge_request)
 
-        assert (
-            exc_info.value.reason
-            == "Sorry, I can't merge requests marked as Work-In-Progress!"
-        )
+        assert exc_info.value.reason == "Sorry, I can't merge requests marked as Draft!"
 
     def test_ensure_mergeable_mr_unresolved_discussion(self):
         merge_job = self.get_merge_job()
         merge_request = self._mock_merge_request(
             assignee_ids=[merge_job._user.id],
             state="opened",
-            work_in_progress=False,
+            draft=False,
             blocking_discussions_resolved=False,
         )
         merge_request.fetch_approvals.return_value.sufficient = True
@@ -160,7 +157,7 @@ class TestJob:
         merge_request = self._mock_merge_request(
             assignee_ids=[merge_job._user.id],
             state="opened",
-            work_in_progress=False,
+            draft=False,
             squash=True,
         )
         merge_request.fetch_approvals.return_value.sufficient = True

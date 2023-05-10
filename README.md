@@ -467,7 +467,7 @@ The flag `--batch` enables testing and merging merge requests in batches. This c
 significantly speed up the rate at which marge-bot processes jobs - not just
 because merge requests can be tested together, but because marge-bot will ensure
 the whole set of merge requests is mergeable first. This includes, for example,
-checking if a merge request is marked as WIP, or does not have enough approvals.
+checking if a merge request is marked as Draft, or does not have enough approvals.
 Essentially, users get faster feedback if there is an issue. Note that you
 probably won't need this unless you have tens of merge requests a day (or
 extremely slow CI).
