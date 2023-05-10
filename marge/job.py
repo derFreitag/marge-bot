@@ -53,7 +53,7 @@ class MergeJob:
         log.info("Ensuring MR !%s is mergeable", merge_request.iid)
         log.debug("Ensuring MR %r is mergeable", merge_request)
 
-        if merge_request.work_in_progress:
+        if merge_request.draft:
             raise CannotMerge("Sorry, I can't merge requests marked as Draft!")
 
         if merge_request.squash and self._options.requests_commit_tagging:

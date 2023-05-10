@@ -134,7 +134,7 @@ class TestBatchJob:
         merge_request = self._mock_merge_request(
             assignee_ids=[batch_merge_job._user.id],
             state="opened",
-            work_in_progress=False,
+            draft=False,
             squash=False,
         )
         merge_request.fetch_approvals.return_value.sufficient = True
