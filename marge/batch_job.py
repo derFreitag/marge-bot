@@ -47,6 +47,12 @@ class BatchMergeJob(MergeJob):
         for batch_mr in batch_mrs:
             log.info("Closing batch MR !%s", batch_mr.iid)
             batch_mr.close()
+            for batch_pipeline in Pipeline.pipelines_by_merge_request(
+                self._project.id, batch_mr.iid, self._api
+            ):
+                if batch_pipeline.status in ("pending", "running"):
+                    log.info("Cancelling obsolete batch pipeline %s", batch_pipeline.id)
+                    batch_pipeline.cancel()
 
     def create_batch_mr(self, target_branch):
         self.push_batch()

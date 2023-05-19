@@ -11,6 +11,7 @@ from marge.batch_job import BatchMergeJob, CannotBatch
 from marge.gitlab import GET
 from marge.job import CannotMerge, MergeJobOptions
 from marge.merge_request import MergeRequest
+from marge.pipeline import Pipeline
 from tests.gitlab_api_mock import MockLab, Ok, commit
 
 
@@ -31,6 +32,9 @@ class TestBatchJob:
         return create_autospec(
             marge.merge_request.MergeRequest, spec_set=True, **options
         )
+
+    def _mock_pipeline(self, **options):
+        return create_autospec(Pipeline, spec_set=True, **options)
 
     def get_batch_merge_job(self, api, mocklab, **batch_merge_kwargs):
         project_id = mocklab.project_info["id"]
@@ -68,9 +72,14 @@ class TestBatchJob:
         )
 
     def test_close_batch_mr(self, api, mocklab):
-        with patch("marge.batch_job.MergeRequest") as mr_class:
+        with patch("marge.batch_job.MergeRequest") as mr_class, patch(
+            "marge.batch_job.Pipeline"
+        ) as pipeline_class:
             batch_mr = self._mock_merge_request()
             mr_class.search.return_value = [batch_mr]
+
+            batch_pipeline = self._mock_pipeline(status="running")
+            pipeline_class.pipelines_by_merge_request.return_value = [batch_pipeline]
 
             batch_merge_job = self.get_batch_merge_job(api, mocklab)
             batch_merge_job.close_batch_mr()
@@ -88,6 +97,10 @@ class TestBatchJob:
                 params=params,
             )
             batch_mr.close.assert_called_once()
+            pipeline_class.pipelines_by_merge_request.assert_called_once_with(
+                ANY, ANY, ANY
+            )
+            batch_pipeline.cancel.assert_called_once()
 
     def test_create_batch_mr(self, api, mocklab):
         with patch("marge.batch_job.MergeRequest") as mr_class:
