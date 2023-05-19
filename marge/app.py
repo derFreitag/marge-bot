@@ -149,6 +149,12 @@ def _parse_config(
         help='Add "Part-of: <$MR_URL>" to each commit in MR.\n',
     )
     parser.add_argument(
+        "--batch-branch-name",
+        type=str,
+        default="marge_bot_batch_merge_job",
+        help="Branch name when batching is enabled\n",
+    )
+    parser.add_argument(
         "--add-reviewers",
         action="store_true",
         help='Add "Reviewed-by: $approver" for each approver of MR to each commit in MR.\n',
@@ -373,6 +379,7 @@ def main(args: Optional[List[str]] = None) -> int:
                 guarantee_final_pipeline=options.guarantee_final_pipeline,
             ),
             batch=options.batch,
+            batch_branch_name=options.batch_branch_name,
             cli=options.cli,
         )
 

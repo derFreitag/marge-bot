@@ -178,6 +178,7 @@ class Bot:
                 merge_requests=merge_requests,
                 repo=repo,
                 options=self._config.merge_opts,
+                batch_branch_name=self._config.batch_branch_name,
             )
             try:
                 batch_merge_job.execute()
@@ -225,6 +226,7 @@ class BotConfig:
     source_branch_regexp: re.Pattern
     batch: bool
     cli: bool
+    batch_branch_name: str
 
 
 MergeJobOptions = job.MergeJobOptions
