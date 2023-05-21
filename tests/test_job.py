@@ -186,7 +186,7 @@ class TestJob:
         merge_request = self._mock_merge_request(
             assignee_ids=[merge_job._user.id],
             state="opened",
-            work_in_progress=False,
+            draft=False,
             squash=False,
         )
         with pytest.raises(CannotMerge) as exc_info:
