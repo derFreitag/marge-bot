@@ -114,7 +114,9 @@ class SingleMergeJob(MergeJob):
 
             self.ensure_mergeable_mr(merge_request)
 
-            auto_squash = True if target_project.squash_option is SquashOption.always else None
+            auto_squash = (
+                True if target_project.squash_option is SquashOption.always else None
+            )
 
             try:
                 ret = merge_request.accept(
@@ -123,7 +125,7 @@ class SingleMergeJob(MergeJob):
                     merge_when_pipeline_succeeds=bool(
                         target_project.only_allow_merge_if_pipeline_succeeds
                     ),
-                    auto_squash=auto_squash
+                    auto_squash=auto_squash,
                 )
                 log.info("merge_request.accept result: %s", ret)
             except gitlab.NotAcceptable as err:

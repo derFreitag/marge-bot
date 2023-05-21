@@ -158,7 +158,7 @@ class TestJob:
                 spec_set=True,
                 squash_option=squash_option,
             ),
-            options=MergeJobOptions.default(add_reviewers=True)
+            options=MergeJobOptions.default(add_reviewers=True),
         )
         merge_request = self._mock_merge_request(
             assignee_ids=[merge_job._user.id],
@@ -171,7 +171,7 @@ class TestJob:
 
         assert (
             exc_info.value.reason == "Sorry, merging requests marked as auto-squash "
-                                     "would ruin my commit tagging!"
+            "would ruin my commit tagging!"
         )
 
     def test_ensure_mergeable_mr_squash_needed_and_trailers(self):

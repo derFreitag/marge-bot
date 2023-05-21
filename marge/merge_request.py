@@ -228,7 +228,13 @@ class MergeRequest(gitlab.Resource):
 
         raise TimeoutError("Waiting for merge request to be rebased by GitLab")
 
-    def accept(self, remove_branch=False, sha=None, merge_when_pipeline_succeeds=True, auto_squash=None):
+    def accept(
+        self,
+        remove_branch=False,
+        sha=None,
+        merge_when_pipeline_succeeds=True,
+        auto_squash=None,
+    ):
         params = {
             "should_remove_source_branch": remove_branch,
             "merge_when_pipeline_succeeds": merge_when_pipeline_succeeds,
@@ -236,7 +242,7 @@ class MergeRequest(gitlab.Resource):
             or self.sha,  # if provided, ensures what is merged is what we want (or fails)
         }
         if auto_squash is not None:
-            params['squash'] = auto_squash
+            params["squash"] = auto_squash
         return self._api.call(
             PUT(f"/projects/{self.project_id}/merge_requests/{self.iid}/merge", params)
         )
