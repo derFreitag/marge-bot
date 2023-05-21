@@ -1,7 +1,8 @@
+import datetime
 import operator
 from enum import Enum, unique
 
-import maya
+import maya  # type: ignore[import]
 
 
 # pylint: disable=invalid-name
@@ -18,7 +19,6 @@ class WeekDay(Enum):
 
 _DAY_NAMES = {day.name.lower(): day for day in WeekDay}
 _DAY_NAMES.update((day.name.lower()[:3], day) for day in WeekDay)
-_DAY_NAMES.update((day, day) for day in WeekDay)
 
 
 def find_weekday(string_or_day):
@@ -28,7 +28,7 @@ def find_weekday(string_or_day):
     if isinstance(string_or_day, str):
         return _DAY_NAMES[string_or_day.lower()]
 
-    raise ValueError('Not a week day: %r' % string_or_day)
+    raise ValueError(f"Not a week day: {string_or_day!r}")
 
 
 class WeeklyInterval:
@@ -60,7 +60,7 @@ class WeeklyInterval:
         return not self == other
 
     def __repr__(self):
-        pat = '{class_name}({from_weekday}, {from_time}, {to_weekday}, {to_time})'
+        pat = "{class_name}({from_weekday}, {from_time}, {to_weekday}, {to_time})"
         if self._is_complement_interval:
             return pat.format(
                 class_name=self.__class__.__name__,
@@ -79,14 +79,14 @@ class WeeklyInterval:
 
     @classmethod
     def from_human(cls, string):
-        from_, to_ = string.split('-')
+        from_, to_ = string.split("-")
 
         def parse_part(part):
-            part = part.replace('@', ' ')
+            part = part.replace("@", " ")
             parts = part.split()
             weekday = parts[0]
             time = parts[1]
-            timezone = parts[2] if len(parts) > 2 else 'UTC'
+            timezone = parts[2] if len(parts) > 2 else "UTC"
             weekday = find_weekday(weekday)
             time = maya.parse(time, timezone=timezone).datetime().time()
             return weekday, time
@@ -128,7 +128,7 @@ class IntervalUnion:
         return not self == other
 
     def __repr__(self):
-        return '{o.__class__.__name__}({o._intervals})'.format(o=self)
+        return "{o.__class__.__name__}({o._intervals})".format(o=self)
 
     @classmethod
     def empty(cls):
@@ -136,8 +136,8 @@ class IntervalUnion:
 
     @classmethod
     def from_human(cls, string):
-        strings = string.split(',')
+        strings = string.split(",")
         return cls(WeeklyInterval.from_human(s) for s in strings)
 
-    def covers(self, date):
+    def covers(self, date: datetime.datetime) -> bool:
         return any(interval.covers(date) for interval in self._intervals)

@@ -141,6 +141,9 @@ optional arguments:
                         Use merge commit when creating batches, so that the commits in the batch MR will be the same with in individual MRs. Requires sudo scope in the access token.
                            [env var: MARGE_USE_MERGE_COMMIT_BATCHES] (default: False)
   --skip-ci-batches     Skip CI when updating individual MRs when using batches   [env var: MARGE_SKIP_CI_BATCHES] (default: False)
+  --guarantee-final-pipeline
+                        Guaranteed final pipeline when assigned to marge-bot
+                        [env var: MARGE_GUARANTEE_FINAL_PIPELINE] (default: False)
 ```
 Here is a config file example
 ```yaml
@@ -211,6 +214,10 @@ Add the public key (`marge-bot-ssh-key.pub`) to the user's `SSH Keys` in GitLab
 and keep the private one handy.
 
 ### Running marge-bot in docker using SSH (what we do)
+
+> **Note**: Official, tagged images of the community fork are not yet deployed. You can
+> try out the latest development images at `registry.gitlab.com/marge-org/marge-bot:main`.
+> After the first release, tagged and `:latest` images will also become available.
 
 Assuming you have already got docker installed, the quickest and most minimal
 way to run marge is like so (*but see note about passing secrets on the
@@ -364,19 +371,8 @@ run:
 
 ### Running marge-bot as a plain python app
 
-#### Installing marge-bot with nix
-
-Alternatively, if you prefer not to use docker, you can also directly run marge.
-If you use [nix](https://nixos.org/nix/) do `nix-env --install -f default.nix`.
-
-The nix install should be fully reproducible on any version of linux (and also
-work on OS X, although this is not something we properly test). If you don't
-want to use docker we recommend you give nix a try.
-
-#### Installing marge-bot the old-fashioned way
-
-Finally, although this is our least preferred alternative, you can always do
-`python3 setup.py install` (note that you will need python3.6).
+You need to install the requirements first `pip install -r requirements_frozen.txt`,
+and then install Marge itself `python3 setup.py install` (note that you will need python3.6+).
 
 Afterwards, the minimal way to run marge is as follows.
 
@@ -471,7 +467,7 @@ The flag `--batch` enables testing and merging merge requests in batches. This c
 significantly speed up the rate at which marge-bot processes jobs - not just
 because merge requests can be tested together, but because marge-bot will ensure
 the whole set of merge requests is mergeable first. This includes, for example,
-checking if a merge request is marked as WIP, or does not have enough approvals.
+checking if a merge request is marked as Draft, or does not have enough approvals.
 Essentially, users get faster feedback if there is an issue. Note that you
 probably won't need this unless you have tens of merge requests a day (or
 extremely slow CI).

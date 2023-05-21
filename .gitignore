@@ -1,13 +1,15 @@
+coverage.xml
+test.xml
 *.pyc
 ENV/
 .cache
 *.egg-info
 .coverage
 .pytest_cache
-
-# nix stuff
-result
-result-*
+.tox/
+/MANIFEST
+/build/
+/dist/
 
 # Editor
 *.sw[po]

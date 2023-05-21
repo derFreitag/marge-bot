@@ -1,32 +1,62 @@
+import abc
+import dataclasses
 import json
 import logging as log
-from collections import namedtuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    Union,
+    cast,
+)
 
 import requests
 
 
-class Api:
-    def __init__(self, gitlab_url, auth_token):
-        self._auth_token = auth_token
-        self._api_base_url = gitlab_url.rstrip('/') + '/api/v4'
+class RequestsMethod(Protocol):
+    # pylint: disable=too-few-public-methods
 
-    def call(self, command, sudo=None):
+    __name__: str
+
+    def __call__(self, urls: str, **kwargs: Any) -> requests.Response:
+        ...
+
+
+class Api:
+    def __init__(self, gitlab_url: str, auth_token: str) -> None:
+        self._auth_token = auth_token
+        self._api_base_url = gitlab_url.rstrip("/") + "/api/v4"
+
+    def call(
+        self, command: "Command", sudo: Optional[int] = None
+    ) -> Union[bool, Dict[str, Any], List[Dict[str, Any]]]:
         method = command.method
         url = self._api_base_url + command.endpoint
-        headers = {'PRIVATE-TOKEN': self._auth_token}
+        headers = {"PRIVATE-TOKEN": self._auth_token}
         if sudo:
-            headers['SUDO'] = '%d' % sudo
-        log.debug('REQUEST: %s %s %r %r', method.__name__.upper(), url, headers, command.call_args)
+            headers["SUDO"] = f"{sudo}"
+        log.debug(
+            "REQUEST: %s %s %r %r",
+            method.__name__.upper(),
+            url,
+            headers,
+            command.call_args,
+        )
         # Timeout to prevent indefinitely hanging requests. 60s is very conservative,
         # but should be short enough to not cause any practical annoyances. We just
         # crash rather than retry since marge-bot should be run in a restart loop anyway.
         try:
             response = method(url, headers=headers, timeout=60, **command.call_args)
         except requests.exceptions.Timeout as err:
-            log.error('Request timeout: %s', err)
+            log.error("Request timeout: %s", err)
             raise
-        log.debug('RESPONSE CODE: %s', response.status_code)
-        log.debug('RESPONSE BODY: %r', response.content)
+        log.debug("RESPONSE CODE: %s", response.status_code)
+        log.debug("RESPONSE BODY: %r", response.content)
 
         if response.status_code == 202:
             return True  # Accepted
@@ -35,7 +65,9 @@ class Api:
             return True  # NoContent
 
         if response.status_code < 300:
-            return command.extract(response.json()) if command.extract else response.json()
+            return (
+                command.extract(response.json()) if command.extract else response.json()
+            )
 
         if response.status_code == 304:
             return False  # Not Modified
@@ -52,7 +84,7 @@ class Api:
             500: InternalServerError,
         }
 
-        def other_error(code, msg):
+        def other_error(code: int, msg: Union[str, Dict[str, Any]]) -> Exception:
             exception = InternalServerError if 500 < code < 600 else UnexpectedError
             return exception(code, msg)
 
@@ -64,12 +96,14 @@ class Api:
 
         raise error(response.status_code, err_message)
 
-    def collect_all_pages(self, get_command):
-        result = []
+    def collect_all_pages(self, get_command: "GET") -> List[Dict[str, Any]]:
+        result: List[Dict[str, Any]] = []
         fetch_again, page_no = True, 1
         while fetch_again:
             page = self.call(get_command.for_page(page_no))
             if page:
+                if TYPE_CHECKING:
+                    assert isinstance(page, list)
                 result.extend(page)
                 page_no += 1
             else:
@@ -77,69 +111,80 @@ class Api:
 
         return result
 
-    def version(self):
-        response = self.call(GET('/version'))
-        return Version.parse(response['version'])
+    def version(self) -> "Version":
+        response = self.call(GET("/version"))
+        if TYPE_CHECKING:
+            assert isinstance(response, dict)
+        return Version.parse(response["version"])
 
 
-def from_singleton_list(fun=None):
-    fun = fun or (lambda x: x)
-
-    def extractor(response_list):
+def from_singleton_list(
+    fun: Optional[Callable[[Dict[str, Any]], Any]] = None
+) -> Callable[[List[Dict[str, Any]]], Any]:
+    def extractor(response_list: List[Dict[str, Any]]) -> Any:
         assert isinstance(response_list, list), type(response_list)
         assert len(response_list) <= 1, len(response_list)
         if not response_list:
             return None
+        if fun is None:
+            return response_list[0]
         return fun(response_list[0])
 
     return extractor
 
 
-class Command(namedtuple('Command', 'endpoint args extract')):
-    def __new__(cls, endpoint, args=None, extract=None):
-        return super(Command, cls).__new__(cls, endpoint, args or {}, extract)
+@dataclasses.dataclass(frozen=True)
+class Command(abc.ABC):
+    endpoint: str
+    args: Dict[str, Any] = dataclasses.field(default_factory=dict)
+    extract: Optional[Callable[[List[Dict[str, Any]]], Dict[str, Any]]] = None
 
     @property
-    def call_args(self):
-        return {'json': self.args}
+    @abc.abstractmethod
+    def method(self) -> RequestsMethod:
+        ...
+
+    @property
+    def call_args(self) -> Dict[str, Dict[str, Any]]:
+        return {"json": self.args}
 
 
 class GET(Command):
     @property
-    def method(self):
-        return requests.get
+    def method(self) -> RequestsMethod:
+        return cast(RequestsMethod, requests.get)
 
     @property
-    def call_args(self):
-        return {'params': _prepare_params(self.args)}
+    def call_args(self) -> Dict[str, Dict[str, str]]:
+        return {"params": _prepare_params(self.args)}
 
-    def for_page(self, page_no):
+    def for_page(self, page_no: int) -> "GET":
         args = self.args
-        return self._replace(args=dict(args, page=page_no, per_page=100))
+        return dataclasses.replace(self, args=dict(args, page=page_no, per_page=100))
 
 
 class PUT(Command):
     @property
-    def method(self):
-        return requests.put
+    def method(self) -> RequestsMethod:
+        return cast(RequestsMethod, requests.put)
 
 
 class POST(Command):
     @property
-    def method(self):
-        return requests.post
+    def method(self) -> RequestsMethod:
+        return cast(RequestsMethod, requests.post)
 
 
 class DELETE(Command):
     @property
-    def method(self):
-        return requests.delete
+    def method(self) -> RequestsMethod:
+        return cast(RequestsMethod, requests.delete)
 
 
-def _prepare_params(params):
-    def process(val):
+def _prepare_params(params: Dict[str, Any]) -> Dict[str, str]:
+    def process(val: Any) -> str:
         if isinstance(val, bool):
-            return 'true' if val else 'false'
+            return "true" if val else "false"
         return str(val)
 
     return {key: process(val) for key, val in params.items()}
@@ -147,14 +192,16 @@ def _prepare_params(params):
 
 class ApiError(Exception):
     @property
-    def error_message(self):
+    def error_message(self) -> Optional[str]:
         args = self.args
         if len(args) != 2:
             return None
 
         arg = args[1]
         if isinstance(arg, dict):
-            return arg.get('message')
+            return arg.get("message")
+        if TYPE_CHECKING:
+            assert isinstance(arg, str)
         return arg
 
 
@@ -199,41 +246,45 @@ class UnexpectedError(ApiError):
 
 
 class Resource:
-    def __init__(self, api, info):
+    def __init__(self, api: Api, info: Dict[str, Any]):
         self._info = info
         self._api = api
 
     @property
-    def info(self):
+    def info(self) -> Dict[str, Any]:
         return self._info
 
     @property
-    def id(self):  # pylint: disable=invalid-name
-        return self.info['id']
+    def id(self) -> int:  # pylint: disable=invalid-name
+        return cast(int, self.info["id"])
 
     @property
-    def api(self):
+    def api(self) -> Api:
         return self._api
 
-    def __repr__(self):
-        return '{0.__class__.__name__}({0._api}, {0.info})'.format(self)
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self._api}, {self.info})"
 
 
-class Version(namedtuple('Version', 'release edition')):
+@dataclasses.dataclass
+class Version:
+    release: Tuple[int, ...]
+    edition: Optional[str]
+
     @classmethod
-    def parse(cls, string):
-        maybe_split_string = string.split('-', maxsplit=1)
+    def parse(cls, string: str) -> "Version":
+        maybe_split_string = string.split("-", maxsplit=1)
         if len(maybe_split_string) == 2:
             release_string, edition = maybe_split_string
         else:
             release_string, edition = string, None
 
-        release = tuple(int(number) for number in release_string.split('.'))
+        release = tuple(int(number) for number in release_string.split("."))
         return cls(release=release, edition=edition)
 
     @property
-    def is_ee(self):
-        return self.edition == 'ee'
+    def is_ee(self) -> bool:
+        return self.edition == "ee"
 
-    def __str__(self):
-        return '%s-%s' % ('.'.join(map(str, self.release)), self.edition)
+    def __str__(self) -> str:
+        return f"{'.'.join(map(str, self.release))}-{self.edition}"

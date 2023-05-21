@@ -1,0 +1,81 @@
+default:
+  interruptible: true
+
+include:
+  - template: 'Workflows/MergeRequest-Pipelines.gitlab-ci.yml'
+
+variables:
+  PY_COLORS: 1
+
+# We enforce semi-linear history. Some jobs only need to run on MRs.
+.rules-merge-request:
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+
+test:
+  extends: .rules-merge-request
+  image: python:${PYTHON_VERSION}
+  parallel:
+    matrix:
+      - PYTHON_VERSION:
+          - "3.8"
+          - "3.9"
+          - "3.10"
+          - "3.11"
+  script:
+    - pip install tox
+    - tox -e py3
+  coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
+  artifacts:
+    paths:
+      - htmlcov/
+    reports:
+      junit: test.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+lint:
+  extends: .rules-merge-request
+  image: python:3.11
+  script:
+    - pip install tox
+    - tox -e flake8,mypy,pylint
+    - tox -e black,isort -- --check
+
+docker-build:
+  image:
+    name: gcr.io/kaniko-project/executor:v1.9.2-debug
+    entrypoint: [""]
+  script:
+    - executor --context "${CI_PROJECT_DIR}" --dockerfile "${CI_PROJECT_DIR}/Dockerfile" $KANIKO_EXTRA_ARGS
+  rules:
+    - if: '$CI_MERGE_REQUEST_ID'
+      changes:
+        paths:
+          - marge/
+          - .gitlab-ci.yml
+          - Dockerfile
+          - poetry.lock
+          - pyproject.toml
+      variables:
+        # only test the build on MRs
+        KANIKO_EXTRA_ARGS: --no-push
+    - if: '$CI_COMMIT_BRANCH || $CI_COMMIT_TAG'
+      variables:
+        # otherwise, push as `:main` or `:<tag>`
+        KANIKO_EXTRA_ARGS: --destination ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_NAME}
+
+docker-promote:
+  needs:
+    - docker-build
+  image:
+    name: gcr.io/go-containerregistry/crane/debug:v0.14.0
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - crane auth login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - crane tag $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG latest
+  rules:
+    - if: '$CI_COMMIT_TAG'

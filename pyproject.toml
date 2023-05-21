@@ -1,0 +1,73 @@
+[tool.poetry]
+name = "marge"
+version = "0.10.1"
+description = "marge-bot is a merge bot for GitLab."
+license = "BSD-3-Clause"
+authors = ["Infrastructure <infrastructure@smarkets.com>"]
+maintainers = ["marge-bot community <marge-bot@proton.me>"]
+readme = "README.md"
+repository = "https://gitlab.com/marge-org/marge-bot"
+keywords = ["gitlab", "merge request", "merge train"]
+
+[tool.poetry.dependencies]
+python = "^3.8.1"
+ConfigArgParse = "^1.5.3"
+maya = "^0.6.1"
+PyYAML = "^6.0"
+requests = "^2.28.2"
+
+[tool.poetry.scripts]
+marge = "marge.__main__:run"
+"marge.app" = "marge.__main__:run"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.3.0"
+flake8 = "^6.0.0"
+isort = "^5.12.0"
+mypy = "^1.1.1"
+pylint = "^2.17.1"
+pytest = "^7.2.2"
+pytest-cov = "^4.0.0"
+types-requests = "^2.28.11.17"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "--cov=marge"
+testpaths = [
+    "tests",
+]
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+files = "."
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+    "marge.__main__",
+    "marge.app",
+    "marge.approvals",
+    "marge.git",
+    "marge.gitlab",
+    "marge.job",
+]
+# strict = true
+check_untyped_defs = true
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+# disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_untyped_defs = true
+no_implicit_reexport = true
+strict_concatenate = true
+strict_equality = true
+warn_return_any = true

@@ -1,14 +1,15 @@
+import dataclasses
+import datetime
 import logging as log
+import re
 import time
-from collections import namedtuple
 from tempfile import TemporaryDirectory
+from typing import Optional
 
-from . import batch_job
-from . import git
-from . import job
+from . import batch_job, git, job
 from . import merge_request as merge_request_module
-from . import single_merge_job
-from . import store
+from . import single_merge_job, store
+from . import user as user_module
 from .project import AccessLevel, Project
 
 MergeRequest = merge_request_module.MergeRequest
@@ -23,12 +24,12 @@ class Bot:
         opts = config.merge_opts
 
         if not user.is_admin:
-            assert not opts.reapprove, (
-                "{0.username} is not an admin, can't impersonate!".format(user)
-            )
-            assert not opts.add_reviewers, (
-                "{0.username} is not an admin, can't lookup Reviewed-by: email addresses ".format(user)
-            )
+            assert (
+                not opts.reapprove
+            ), f"{user.username} is not an admin, can't impersonate!"
+            assert (
+                not opts.add_reviewers
+            ), f"{user.username} is not an admin, can't lookup Reviewed-by: email addresses "
 
     def start(self):
         with TemporaryDirectory() as root_dir:
@@ -71,26 +72,30 @@ class Bot:
             if self._config.cli:
                 return
 
-            big_sleep = max(0,
-                            min_time_to_sleep_after_iterating_all_projects_in_secs -
-                            time_to_sleep_between_projects_in_secs * len(projects))
-            log.info('Sleeping for %s seconds...', big_sleep)
+            big_sleep = max(
+                0,
+                min_time_to_sleep_after_iterating_all_projects_in_secs
+                - time_to_sleep_between_projects_in_secs * len(projects),
+            )
+            log.info("Sleeping for %s seconds...", big_sleep)
             time.sleep(big_sleep)
 
     def _get_projects(self):
-        log.info('Finding out my current projects...')
+        log.info("Finding out my current projects...")
         my_projects = Project.fetch_all_mine(self._api)
         project_regexp = self._config.project_regexp
-        filtered_projects = [p for p in my_projects if project_regexp.match(p.path_with_namespace)]
+        filtered_projects = [
+            p for p in my_projects if project_regexp.match(p.path_with_namespace)
+        ]
         log.debug(
-            'Projects that match project_regexp: %s',
-            [p.path_with_namespace for p in filtered_projects]
+            "Projects that match project_regexp: %s",
+            [p.path_with_namespace for p in filtered_projects],
         )
         filtered_out = set(my_projects) - set(filtered_projects)
         if filtered_out:
             log.debug(
-                'Projects that do not match project_regexp: %s',
-                [p.path_with_namespace for p in filtered_out]
+                "Projects that do not match project_regexp: %s",
+                [p.path_with_namespace for p in filtered_out],
             )
         return filtered_projects
 
@@ -104,14 +109,17 @@ class Bot:
             project_name = project.path_with_namespace
 
             if project.access_level < AccessLevel.reporter:
-                log.warning("Don't have enough permissions to browse merge requests in %s!", project_name)
+                log.warning(
+                    "Don't have enough permissions to browse merge requests in %s!",
+                    project_name,
+                )
                 continue
             merge_requests = self._get_merge_requests(project, project_name)
             self._process_merge_requests(repo_manager, project, merge_requests)
             time.sleep(time_to_sleep_between_projects_in_secs)
 
     def _get_merge_requests(self, project, project_name):
-        log.info('Fetching merge requests assigned to me in %s...', project_name)
+        log.info("Fetching merge requests assigned to me in %s...", project_name)
         my_merge_requests = MergeRequest.fetch_all_open_for_user(
             project_id=project.id,
             user=self.user,
@@ -119,36 +127,37 @@ class Bot:
             merge_order=self._config.merge_order,
         )
         branch_regexp = self._config.branch_regexp
-        filtered_mrs = [mr for mr in my_merge_requests
-                        if branch_regexp.match(mr.target_branch)]
+        filtered_mrs = [
+            mr for mr in my_merge_requests if branch_regexp.match(mr.target_branch)
+        ]
         log.debug(
-            'MRs that match branch_regexp: %s',
-            [mr.web_url for mr in filtered_mrs]
+            "MRs that match branch_regexp: %s", [mr.web_url for mr in filtered_mrs]
         )
         filtered_out = set(my_merge_requests) - set(filtered_mrs)
         if filtered_out:
             log.debug(
-                'MRs that do not match branch_regexp: %s',
-                [mr.web_url for mr in filtered_out]
+                "MRs that do not match branch_regexp: %s",
+                [mr.web_url for mr in filtered_out],
             )
         source_branch_regexp = self._config.source_branch_regexp
-        source_filtered_mrs = [mr for mr in filtered_mrs
-                               if source_branch_regexp.match(mr.source_branch)]
+        source_filtered_mrs = [
+            mr for mr in filtered_mrs if source_branch_regexp.match(mr.source_branch)
+        ]
         log.debug(
-            'MRs that match source_branch_regexp: %s',
-            [mr.web_url for mr in source_filtered_mrs]
+            "MRs that match source_branch_regexp: %s",
+            [mr.web_url for mr in source_filtered_mrs],
         )
         source_filtered_out = set(filtered_mrs) - set(source_filtered_mrs)
         if source_filtered_out:
             log.debug(
-                'MRs that do not match source_branch_regexp: %s',
-                [mr.web_url for mr in source_filtered_out]
+                "MRs that do not match source_branch_regexp: %s",
+                [mr.web_url for mr in source_filtered_out],
             )
         return source_filtered_mrs
 
     def _process_merge_requests(self, repo_manager, project, merge_requests):
         if not merge_requests:
-            log.info('Nothing to merge at this point...')
+            log.info("Nothing to merge at this point...")
             return
 
         try:
@@ -157,9 +166,11 @@ class Bot:
             log.exception("Couldn't initialize repository for project!")
             raise
 
-        log.info('Got %s requests to merge;', len(merge_requests))
+        log.info("Got %s requests to merge;", len(merge_requests))
         if self._config.batch and len(merge_requests) > 1:
-            log.info('Attempting to merge as many MRs as possible using BatchMergeJob...')
+            log.info(
+                "Attempting to merge as many MRs as possible using BatchMergeJob..."
+            )
             batch_merge_job = batch_job.BatchMergeJob(
                 api=self._api,
                 user=self.user,
@@ -167,21 +178,24 @@ class Bot:
                 merge_requests=merge_requests,
                 repo=repo,
                 options=self._config.merge_opts,
+                batch_branch_name=self._config.batch_branch_name,
             )
             try:
                 batch_merge_job.execute()
                 return
             except batch_job.CannotBatch as err:
-                log.warning('BatchMergeJob aborted: %s', err)
+                log.warning("BatchMergeJob aborted: %s", err)
             except batch_job.CannotMerge as err:
-                log.warning('BatchMergeJob failed: %s', err)
+                log.warning("BatchMergeJob failed: %s", err)
                 return
             except git.GitError as err:
-                log.exception('BatchMergeJob failed: %s', err)
-        log.info('Attempting to merge the oldest MR...')
+                log.exception("BatchMergeJob failed: %s", err)
+        log.info("Attempting to merge the oldest MR...")
         merge_request = merge_requests[0]
         merge_job = self._get_single_job(
-            project=project, merge_request=merge_request, repo=repo,
+            project=project,
+            merge_request=merge_request,
+            repo=repo,
             options=self._config.merge_opts,
         )
         merge_job.execute()
@@ -197,10 +211,22 @@ class Bot:
         )
 
 
-class BotConfig(namedtuple('BotConfig',
-                           'user use_https auth_token ssh_key_file project_regexp merge_order merge_opts ' +
-                           'git_timeout git_reference_repo branch_regexp source_branch_regexp batch cli')):
-    pass
+@dataclasses.dataclass
+class BotConfig:
+    user: user_module.User
+    use_https: bool
+    auth_token: str
+    ssh_key_file: Optional[str]
+    project_regexp: re.Pattern
+    merge_order: str
+    merge_opts: job.MergeJobOptions
+    git_timeout: datetime.timedelta
+    git_reference_repo: str
+    branch_regexp: re.Pattern
+    source_branch_regexp: re.Pattern
+    batch: bool
+    cli: bool
+    batch_branch_name: str
 
 
 MergeJobOptions = job.MergeJobOptions

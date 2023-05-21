@@ -2,18 +2,18 @@
 An auto-merger of merge requests for GitLab
 """
 
+import argparse
 import contextlib
+import datetime
 import logging
 import re
 import sys
 import tempfile
-from datetime import timedelta
+from typing import Iterator, List, Optional, Tuple, cast
 
-import configargparse
+import configargparse  # type: ignore[import]
 
-from . import bot
-from . import interval
-from . import gitlab
+from . import bot, gitlab, interval
 from . import user as user_module
 
 
@@ -21,106 +21,112 @@ class MargeBotCliArgError(Exception):
     pass
 
 
-def time_interval(str_interval):
-    try:
-        quant, unit = re.match(r'\A([\d.]+) ?(h|m(?:in)?|s)?\Z', str_interval).groups()
-        translate = {'h': 'hours', 'm': 'minutes', 'min': 'minutes', 's': 'seconds'}
-        return timedelta(**{translate[unit or 's']: float(quant)})
-    except (AttributeError, ValueError) as err:
-        raise configargparse.ArgumentTypeError(
-                'Invalid time interval (e.g. 12[s|min|h]): %s' % str_interval
-        ) from err
+def time_interval(str_interval: str) -> datetime.timedelta:
+    re_match = re.match(r"\A([\d.]+) ?(h|m(?:in)?|s)?\Z", str_interval)
+    if re_match:
+        quant, unit = re_match.groups()
+        unit = unit if unit else "s"
+        translate = {"h": "hours", "m": "minutes", "min": "minutes", "s": "seconds"}
+        if unit in translate:
+            return datetime.timedelta(**{translate[unit]: float(quant)})
+    raise configargparse.ArgumentTypeError(
+        f"Invalid time interval (e.g. 12[s|min|h]): {str_interval!r}"
+    )
 
 
-def _parse_config(args):  # pylint: disable=too-many-statements
-
-    def regexp(str_regex):
+def _parse_config(
+    args: List[str],
+) -> argparse.Namespace:
+    # pylint: disable=too-many-statements
+    def regexp(str_regex: str) -> "re.Pattern[str]":
         try:
             return re.compile(str_regex)
         except re.error as err:
-            raise configargparse.ArgumentTypeError('Invalid regexp: %r (%s)' % (str_regex, err.msg))
+            raise configargparse.ArgumentTypeError(
+                f"Invalid regexp: {str_regex!r} ({err.msg})"
+            )
 
     parser = configargparse.ArgParser(
-        auto_env_var_prefix='MARGE_',
+        auto_env_var_prefix="MARGE_",
         ignore_unknown_config_file_keys=True,  # Don't parse unknown args
         config_file_parser_class=configargparse.YAMLConfigFileParser,
         formatter_class=configargparse.ArgumentDefaultsRawHelpFormatter,
         description=__doc__,
     )
     parser.add_argument(
-        '--config-file',
-        env_var='MARGE_CONFIG_FILE',
+        "--config-file",
+        env_var="MARGE_CONFIG_FILE",
         type=str,
         is_config_file=True,
-        help='config file path',
+        help="config file path",
     )
     auth_token_group = parser.add_mutually_exclusive_group(required=True)
     auth_token_group.add_argument(
-        '--auth-token',
+        "--auth-token",
         type=str,
-        metavar='TOKEN',
+        metavar="TOKEN",
         help=(
-            'Your GitLab token.\n'
-            'DISABLED because passing credentials on the command line is insecure:\n'
+            "Your GitLab token.\n"
+            "DISABLED because passing credentials on the command line is insecure:\n"
             'You can still set it via ENV variable or config file, or use "--auth-token-file" flag.\n'
         ),
     )
     auth_token_group.add_argument(
-        '--auth-token-file',
-        type=configargparse.FileType('rt'),
-        metavar='FILE',
-        help='Path to your GitLab token file.\n',
+        "--auth-token-file",
+        type=configargparse.FileType("rt"),
+        metavar="FILE",
+        help="Path to your GitLab token file.\n",
     )
     parser.add_argument(
-        '--gitlab-url',
+        "--gitlab-url",
         type=str,
         required=True,
-        metavar='URL',
+        metavar="URL",
         help='Your GitLab instance, e.g. "https://gitlab.example.com".\n',
     )
     repo_access = parser.add_mutually_exclusive_group(required=True)
     repo_access.add_argument(
-        '--use-https',
-        env_var='MARGE_USE_HTTPS',
-        action='store_true',
-        help='use HTTP(S) instead of SSH for GIT repository access\n',
+        "--use-https",
+        env_var="MARGE_USE_HTTPS",
+        action="store_true",
+        help="use HTTP(S) instead of SSH for GIT repository access\n",
     )
     repo_access.add_argument(
-        '--ssh-key',
+        "--ssh-key",
         type=str,
-        metavar='KEY',
+        metavar="KEY",
         help=(
-            'The private ssh key for marge so it can clone/push.\n'
-            'DISABLED because passing credentials on the command line is insecure:\n'
+            "The private ssh key for marge so it can clone/push.\n"
+            "DISABLED because passing credentials on the command line is insecure:\n"
             'You can still set it via ENV variable or config file, or use "--ssh-key-file" flag.\n'
         ),
     )
     repo_access.add_argument(
-        '--ssh-key-file',
+        "--ssh-key-file",
         type=str,  # because we want a file location, not the content
-        metavar='FILE',
-        help='Path to the private ssh key for marge so it can clone/push.\n',
+        metavar="FILE",
+        help="Path to the private ssh key for marge so it can clone/push.\n",
     )
     parser.add_argument(
-        '--embargo',
+        "--embargo",
         type=interval.IntervalUnion.from_human,
-        metavar='INTERVAL[,..]',
+        metavar="INTERVAL[,..]",
         help='Time(s) during which no merging is to take place, e.g. "Friday 1pm - Monday 9am".\n',
     )
     experimental_group = parser.add_mutually_exclusive_group(required=False)
     experimental_group.add_argument(
-        '--use-merge-strategy',
-        action='store_true',
+        "--use-merge-strategy",
+        action="store_true",
         help=(
-            'Use git merge instead of git rebase to update the *source* branch (EXPERIMENTAL)\n'
-            'If you need to use a strict no-rebase workflow (in most cases\n'
-            'you don\'t want this, even if you configured gitlab to use merge requests\n'
-            'to use merge commits on the *target* branch (the default).)\n'
+            "Use git merge instead of git rebase to update the *source* branch (EXPERIMENTAL)\n"
+            "If you need to use a strict no-rebase workflow (in most cases\n"
+            "you don't want this, even if you configured gitlab to use merge requests\n"
+            "to use merge commits on the *target* branch (the default).)\n"
         ),
     )
     parser.add_argument(
-        '--rebase-remotely',
-        action='store_true',
+        "--rebase-remotely",
+        action="store_true",
         help=(
             "Instead of rebasing in a local clone of the repository, use GitLab's\n"
             "built-in rebase functionality, via their API. Note that Marge can't add\n"
@@ -128,166 +134,186 @@ def _parse_config(args):  # pylint: disable=too-many-statements
         ),
     )
     parser.add_argument(
-        '--add-tested',
-        action='store_true',
+        "--add-tested",
+        action="store_true",
         help='Add "Tested: marge-bot <$MR_URL>" for the final commit on branch after it passed CI.\n',
     )
     parser.add_argument(
-        '--batch',
-        action='store_true',
-        help='Enable processing MRs in batches\n',
+        "--batch",
+        action="store_true",
+        help="Enable processing MRs in batches\n",
     )
     parser.add_argument(
-        '--add-part-of',
-        action='store_true',
+        "--add-part-of",
+        action="store_true",
         help='Add "Part-of: <$MR_URL>" to each commit in MR.\n',
     )
     parser.add_argument(
-        '--add-reviewers',
-        action='store_true',
+        "--batch-branch-name",
+        type=str,
+        default="marge_bot_batch_merge_job",
+        help="Branch name when batching is enabled\n",
+    )
+    parser.add_argument(
+        "--add-reviewers",
+        action="store_true",
         help='Add "Reviewed-by: $approver" for each approver of MR to each commit in MR.\n',
     )
     parser.add_argument(
-        '--impersonate-approvers',
-        action='store_true',
-        help='Marge-bot pushes effectively don\'t change approval status.\n',
+        "--impersonate-approvers",
+        action="store_true",
+        help="Marge-bot pushes effectively don't change approval status.\n",
     )
     parser.add_argument(
-        '--merge-order',
-        default='created_at',
-        choices=('created_at', 'updated_at', 'assigned_at'),
-        help='Order marge merges assigned requests. created_at (default), updated_at or assigned_at.\n',
+        "--merge-order",
+        default="created_at",
+        choices=("created_at", "updated_at", "assigned_at"),
+        help="Order marge merges assigned requests. created_at (default), updated_at or assigned_at.\n",
     )
     parser.add_argument(
-        '--approval-reset-timeout',
+        "--approval-reset-timeout",
         type=time_interval,
-        default='0s',
+        default="0s",
         help=(
-            'How long to wait for approvals to reset after pushing.\n'
+            "How long to wait for approvals to reset after pushing.\n"
             'Only useful with the "new commits remove all approvals" option in a project\'s settings.\n'
-            'This is to handle the potential race condition where approvals don\'t reset in GitLab\n'
-            'after a force push due to slow processing of the event.\n'
+            "This is to handle the potential race condition where approvals don't reset in GitLab\n"
+            "after a force push due to slow processing of the event.\n"
         ),
     )
     parser.add_argument(
-        '--project-regexp',
+        "--project-regexp",
         type=regexp,
-        default='.*',
+        default=".*",
         help="Only process projects that match; e.g. 'some_group/.*' or '(?!exclude/me)'.\n",
     )
     parser.add_argument(
-        '--ci-timeout',
+        "--ci-timeout",
         type=time_interval,
-        default='15min',
-        help='How long to wait for CI to pass.\n',
+        default="15min",
+        help="How long to wait for CI to pass.\n",
     )
     parser.add_argument(
-        '--max-ci-time-in-minutes',
+        "--max-ci-time-in-minutes",
         type=int,
         default=None,
-        help='Deprecated; use --ci-timeout.\n',
+        help="Deprecated; use --ci-timeout.\n",
     )
     parser.add_argument(
-        '--git-timeout',
+        "--git-timeout",
         type=time_interval,
-        default='120s',
-        help='How long a single git operation can take.\n'
+        default="120s",
+        help="How long a single git operation can take.\n",
     )
     parser.add_argument(
-        '--git-reference-repo',
+        "--git-reference-repo",
         type=str,
         default=None,
-        help='A reference repo to be used when git cloning.\n'
+        help="A reference repo to be used when git cloning.\n",
     )
     parser.add_argument(
-        '--branch-regexp',
+        "--branch-regexp",
         type=regexp,
-        default='.*',
-        help='Only process MRs whose target branches match the given regular expression.\n',
+        default=".*",
+        help="Only process MRs whose target branches match the given regular expression.\n",
     )
     parser.add_argument(
-        '--source-branch-regexp',
+        "--source-branch-regexp",
         type=regexp,
-        default='.*',
-        help='Only process MRs whose source branches match the given regular expression.\n',
+        default=".*",
+        help="Only process MRs whose source branches match the given regular expression.\n",
     )
     parser.add_argument(
-        '--debug',
-        action='store_true',
-        help='Debug logging (includes all HTTP requests etc).\n',
+        "--debug",
+        action="store_true",
+        help="Debug logging (includes all HTTP requests etc).\n",
     )
     parser.add_argument(
-        '--use-no-ff-batches',
-        action='store_true',
-        help='Disable fast forwarding when merging MR batches'
+        "--use-no-ff-batches",
+        action="store_true",
+        help="Disable fast forwarding when merging MR batches",
     )
     parser.add_argument(
-        '--use-merge-commit-batches',
-        action='store_true',
-        help='Use merge commit when creating batches, so that the commits in the batch MR '
-             'will be the same with in individual MRs. Requires sudo scope in the access token.\n',
+        "--use-merge-commit-batches",
+        action="store_true",
+        help="Use merge commit when creating batches, so that the commits in the batch MR "
+        "will be the same with in individual MRs. Requires sudo scope in the access token.\n",
     )
     parser.add_argument(
-        '--skip-ci-batches',
-        action='store_true',
-        help='Skip CI when updating individual MRs when using batches'
+        "--skip-ci-batches",
+        action="store_true",
+        help="Skip CI when updating individual MRs when using batches",
     )
     parser.add_argument(
-        '--cli',
-        action='store_true',
-        help='Run marge-bot as a single CLI command, not a service'
+        "--cli",
+        action="store_true",
+        help="Run marge-bot as a single CLI command, not a service",
     )
     parser.add_argument(
-        '--guarantee-final-pipeline',
-        action='store_true',
-        help='Guaranteed final pipeline when assigned to marge-bot'
+        "--guarantee-final-pipeline",
+        action="store_true",
+        help="Guaranteed final pipeline when assigned to marge-bot",
     )
 
-    config = parser.parse_args(args)
+    config = cast(argparse.Namespace, parser.parse_args(args))
 
     if config.use_merge_strategy and config.batch:
-        raise MargeBotCliArgError('--use-merge-strategy and --batch are currently mutually exclusive')
+        raise MargeBotCliArgError(
+            "--use-merge-strategy and --batch are currently mutually exclusive"
+        )
     if config.use_merge_strategy and config.add_tested:
-        raise MargeBotCliArgError('--use-merge-strategy and --add-tested are currently mutually exclusive')
+        raise MargeBotCliArgError(
+            "--use-merge-strategy and --add-tested are currently mutually exclusive"
+        )
     if config.rebase_remotely:
         conflicting_flag = [
-            '--use-merge-strategy',
-            '--add-tested',
-            '--add-reviewers',
-            '--add-part-of',
+            "--use-merge-strategy",
+            "--add-tested",
+            "--add-reviewers",
+            "--add-part-of",
         ]
         for flag in conflicting_flag:
             if getattr(config, flag[2:].replace("-", "_")):
-                raise MargeBotCliArgError('--rebase-remotely and %s are mutually exclusive' % flag)
+                raise MargeBotCliArgError(
+                    f"--rebase-remotely and {flag} are mutually exclusive"
+                )
 
     cli_args = []
     # pylint: disable=protected-access
-    for _, (_, value) in parser._source_to_settings.get(configargparse._COMMAND_LINE_SOURCE_KEY, {}).items():
+    for _, (_, value) in parser._source_to_settings.get(
+        configargparse._COMMAND_LINE_SOURCE_KEY, {}
+    ).items():
         cli_args.extend(value)
-    for bad_arg in ['--auth-token', '--ssh-key']:
+    for bad_arg in ["--auth-token", "--ssh-key"]:
         if any(bad_arg in arg for arg in cli_args):
-            raise MargeBotCliArgError('"%s" can only be set via ENV var or config file.' % bad_arg)
+            raise MargeBotCliArgError(
+                f'"{bad_arg}" can only be set via ENV var or config file.'
+            )
     return config
 
 
 @contextlib.contextmanager
-def _secret_auth_token_and_ssh_key(options):
+def _secret_auth_token_and_ssh_key(
+    options: argparse.Namespace,
+) -> Iterator[Tuple[str, Optional[str]]]:
     auth_token = options.auth_token or options.auth_token_file.readline().strip()
     if options.use_https:
         yield auth_token, None
     elif options.ssh_key_file:
         yield auth_token, options.ssh_key_file
     else:
-        with tempfile.NamedTemporaryFile(mode='w', prefix='ssh-key-') as tmp_ssh_key_file:
+        with tempfile.NamedTemporaryFile(
+            mode="w", prefix="ssh-key-"
+        ) as tmp_ssh_key_file:
             try:
-                tmp_ssh_key_file.write(options.ssh_key + '\n')
+                tmp_ssh_key_file.write(options.ssh_key + "\n")
                 tmp_ssh_key_file.flush()
                 yield auth_token, tmp_ssh_key_file.name
             finally:
                 tmp_ssh_key_file.close()
 
 
-def main(args=None):
+def main(args: Optional[List[str]] = None) -> int:
     if args is None:
         args = sys.argv[1:]
     logging.basicConfig()
@@ -305,21 +331,23 @@ def main(args=None):
         if options.max_ci_time_in_minutes:
             logging.warning(
                 "--max-ci-time-in-minutes is DEPRECATED, use --ci-timeout %dmin",
-                options.max_ci_time_in_minutes
+                options.max_ci_time_in_minutes,
             )
-            options.ci_timeout = timedelta(minutes=options.max_ci_time_in_minutes)
+            options.ci_timeout = datetime.timedelta(
+                minutes=options.max_ci_time_in_minutes
+            )
 
         if options.batch:
-            logging.warning('Experimental batch mode enabled')
+            logging.warning("Experimental batch mode enabled")
 
         if options.use_merge_strategy:
             fusion = bot.Fusion.merge
         elif options.rebase_remotely:
             version = api.version()
             if version.release < (11, 6):
-                raise Exception(
+                raise ValueError(
                     "Need GitLab 11.6+ to use rebase through the API, "
-                    "but your instance is {}".format(version)
+                    f"but your instance is {version}"
                 )
             fusion = bot.Fusion.gitlab_rebase
         else:
@@ -351,8 +379,10 @@ def main(args=None):
                 guarantee_final_pipeline=options.guarantee_final_pipeline,
             ),
             batch=options.batch,
+            batch_branch_name=options.batch_branch_name,
             cli=options.cli,
         )
 
         marge_bot = bot.Bot(api=api, config=config)
         marge_bot.start()
+    return 0
