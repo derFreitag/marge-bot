@@ -57,8 +57,8 @@ class MergeJob:
             raise CannotMerge("Sorry, I can't merge requests marked as Draft!")
 
         auto_squash = (
-            self._project.squash_option is SquashOption.always or
-            merge_request.squash
+            self._project.squash_option is SquashOption.always
+            or merge_request.squash
         )
 
         if auto_squash and self._options.requests_commit_tagging:
