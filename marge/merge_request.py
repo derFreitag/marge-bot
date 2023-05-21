@@ -238,7 +238,7 @@ class MergeRequest(gitlab.Resource):
         if auto_squash is not None:
             params['squash'] = auto_squash
         return self._api.call(
-            PUT(f"/projects/{self.project_id}/merge_requests/{self.iid}/merge",params)
+            PUT(f"/projects/{self.project_id}/merge_requests/{self.iid}/merge", params)
         )
 
     def close(self):

@@ -150,7 +150,7 @@ class TestJob:
             == "Sorry, I can't merge requests which have unresolved discussions!"
         )
 
-    @pytest.mark.parametrize('squash_option', marge.project.SquashOption)
+    @pytest.mark.parametrize("squash_option", marge.project.SquashOption)
     def test_ensure_mergeable_mr_squash_wanted_and_trailers(self, squash_option):
         merge_job = self.get_merge_job(
             project=create_autospec(
@@ -185,7 +185,7 @@ class TestJob:
         )
         merge_request = self._mock_merge_request(
             assignee_ids=[merge_job._user.id],
-            state='opened',
+            state="opened",
             work_in_progress=False,
             squash=False,
         )

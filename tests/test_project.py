@@ -112,7 +112,7 @@ class TestProject:
         assert project.merge_requests_enabled is True
         assert project.only_allow_merge_if_pipeline_succeeds is True
         assert project.only_allow_merge_if_all_discussions_are_resolved is False
-        assert project.squash_option == 'default_off'
+        assert project.squash_option == "default_off"
         assert project.access_level == AccessLevel.developer
 
     def test_group_access(self):
