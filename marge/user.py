@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING, Optional
+
 from . import gitlab
 
 GET = gitlab.GET
@@ -5,8 +7,10 @@ GET = gitlab.GET
 
 class User(gitlab.Resource):
     @classmethod
-    def myself(cls, api):
+    def myself(cls, api: gitlab.Api) -> "User":
         info = api.call(GET("/user"))
+        if TYPE_CHECKING:
+            assert isinstance(info, dict)
 
         if info.get("is_admin") is None:  # WORKAROUND FOR BUG IN 9.2.2
             try:
@@ -19,16 +23,21 @@ class User(gitlab.Resource):
         return cls(api, info)
 
     @property
-    def is_admin(self):
-        return self.info["is_admin"]
+    def is_admin(self) -> bool:
+        result = self.info["is_admin"]
+        if TYPE_CHECKING:
+            assert isinstance(result, bool)
+        return result
 
     @classmethod
-    def fetch_by_id(cls, user_id, api):
+    def fetch_by_id(cls, user_id: int, api: gitlab.Api) -> "User":
         info = api.call(GET(f"/users/{user_id}"))
+        if TYPE_CHECKING:
+            assert isinstance(info, dict)
         return cls(api, info)
 
     @classmethod
-    def fetch_by_username(cls, username, api):
+    def fetch_by_username(cls, username: str, api: gitlab.Api) -> "User":
         info = api.call(
             GET(
                 "/users",
@@ -36,21 +45,36 @@ class User(gitlab.Resource):
                 gitlab.from_singleton_list(),
             )
         )
+        if TYPE_CHECKING:
+            assert isinstance(info, dict)
         return cls(api, info)
 
     @property
-    def name(self):
-        return self.info["name"].strip()
+    def name(self) -> str:
+        result = self.info["name"]
+        if TYPE_CHECKING:
+            assert isinstance(result, str)
+        return result.strip()
 
     @property
-    def username(self):
-        return self.info["username"]
+    def username(self) -> str:
+        result = self.info["username"]
+        if TYPE_CHECKING:
+            assert isinstance(result, str)
+        return result
 
     @property
-    def email(self):
+    def email(self) -> Optional[str]:
         """Only visible to admins and 'self'. Sigh."""
-        return self.info.get("email")
+        result = self.info.get("email")
+        if TYPE_CHECKING:
+            if result is not None:
+                assert isinstance(result, str)
+        return result
 
     @property
-    def state(self):
-        return self.info["state"]
+    def state(self) -> str:
+        result = self.info["state"]
+        if TYPE_CHECKING:
+            assert isinstance(result, str)
+        return result
