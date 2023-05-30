@@ -52,12 +52,17 @@ warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
 module = [
+    "marge.__init__",
     "marge.__main__",
     "marge.app",
     "marge.approvals",
+    "marge.branch",
+    "marge.commit",
     "marge.git",
     "marge.gitlab",
     "marge.job",
+    "marge.pipeline",
+    "marge.user",
 ]
 # strict = true
 check_untyped_defs = true
