@@ -371,8 +371,9 @@ run:
 
 ### Running marge-bot as a plain python app
 
-You need to install the requirements first `pip install -r requirements_frozen.txt`,
-and then install Marge itself `python3 setup.py install` (note that you will need python3.8+).
+You need to install poetry first `pip install poetry`, and then install Marge
+and its dependencies with `poetry install` (note that you will need
+python3.8+).
 
 Afterwards, the minimal way to run marge is as follows.
 
