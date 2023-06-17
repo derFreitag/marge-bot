@@ -371,14 +371,25 @@ run:
 
 ### Running marge-bot as a plain python app
 
-You need to install poetry first `pip install poetry`, and then install Marge
-and its dependencies with `poetry install` (note that you will need
-python3.8+).
-
-Afterwards, the minimal way to run marge is as follows.
+You can also install Marge as a plain Python application (note that you will need python3.8+):
 
 ```bash
-marge.app --auth-token-file marge-bot.token \
+# Install from remote repository
+pip install git+https://gitlab.com/marge-org/marge-bot.git
+
+# Or an editable install
+pip install --editable git+https://gitlab.com/marge-org/marge-bot.git#egg=marge
+
+# Or run it straight from a local repository
+git clone https://gitlab.com/marge-org/marge-bot.git
+cd marge-bot/
+pip install --editable .
+```
+
+Afterwards, the minimal way to run marge is as follows:
+
+```bash
+marge --auth-token-file marge-bot.token \
           --gitlab-url 'http://your.gitlab.instance.com' \
           --ssh-key-file marge-bot-ssh-key
 ```
