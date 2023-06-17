@@ -227,7 +227,7 @@ commandline below*):
 docker run --restart=on-failure \ # restart if marge crashes because GitLab is flaky
   -e MARGE_AUTH_TOKEN="$(cat marge-bot.token)" \
   -e MARGE_SSH_KEY="$(cat marge-bot-ssh-key)" \
-  smarkets/marge-bot \
+  registry.gitlab.com/marge-org/marge-bot:main \
   --gitlab-url='http://your.gitlab.instance.com'
 ```
 
@@ -257,7 +257,7 @@ ssh-key: |
 ```bash
 docker run --restart=on-failure \
   -v "$(pwd)":/configuration \
-  smarkets/marge-bot \
+  registry.gitlab.com/marge-org/marge-bot:main \
   --config-file=/configuration/marge-bot-config.yaml
 ```
 
@@ -268,7 +268,7 @@ image built from the HEAD commit of the `master` branch. Note that this image
 may contain bugs.
 
 You can also specify a particular version as a tag, e.g.
-`smarkets/marge-bot:0.7.0`.
+`registry.gitlab.com/marge-org/marge-bot:0.11.0`.
 
 ### Running marge-bot in docker using HTTPS
 
@@ -279,7 +279,7 @@ environment variable `MARGE_USE_HTTPS` or the config file property `use-https`.
 ```bash
 docker run --restart=on-failure \ # restart if marge crashes because GitLab is flaky
   -e MARGE_AUTH_TOKEN="$(cat marge-bot.token)" \
-  smarkets/marge-bot \
+  registry.gitlab.com/marge-org/marge-bot:main \
   --use-https \
   --gitlab-url='http://your.gitlab.instance.com'
 ```
@@ -293,7 +293,7 @@ template:
 ```bash
 ktmpl ./deploy.yml \
 --parameter APP_NAME "marge-bot" \
---parameter APP_IMAGE "smarkets/marge-bot" \
+--parameter APP_IMAGE "registry.gitlab.com/marge-org/marge-bot:main" \
 --parameter KUBE_NAMESPACE "marge-bot" \
 --parameter MARGE_GITLAB_URL 'http://your.gitlab.instance.com' \
 --parameter MARGE_AUTH_TOKEN "$(cat marge-bot.token)" \
@@ -311,7 +311,7 @@ Or you can run marge in Docker Swarm, e.g. here's how you use a compose file:
 version: '3.8'
 services:
   marge-bot:
-    image: smarkets/marge-bot:latest
+    image: registry.gitlab.com/marge-org/marge-bot:main
     configs:
       - source: marge_bot_config
         target: /configuration/marge-bot-config.yaml
@@ -359,7 +359,7 @@ Then add a scheduled pipeline run to your project with the following minimal
 ```yaml
 run:
   image:
-    name: smarkets/marge-bot:latest
+    name: registry.gitlab.com/marge-org/marge-bot:main
     entrypoint: [""]
   only:
     - schedules
@@ -371,13 +371,25 @@ run:
 
 ### Running marge-bot as a plain python app
 
-You need to install the requirements first `pip install -r requirements_frozen.txt`,
-and then install Marge itself `python3 setup.py install` (note that you will need python3.6+).
-
-Afterwards, the minimal way to run marge is as follows.
+You can also install Marge as a plain Python application (note that you will need python3.8+):
 
 ```bash
-marge.app --auth-token-file marge-bot.token \
+# Install from remote repository
+pip install git+https://gitlab.com/marge-org/marge-bot.git
+
+# Or an editable install
+pip install --editable git+https://gitlab.com/marge-org/marge-bot.git#egg=marge
+
+# Or run it straight from a local repository
+git clone https://gitlab.com/marge-org/marge-bot.git
+cd marge-bot/
+pip install --editable .
+```
+
+Afterwards, the minimal way to run marge is as follows:
+
+```bash
+marge --auth-token-file marge-bot.token \
           --gitlab-url 'http://your.gitlab.instance.com' \
           --ssh-key-file marge-bot-ssh-key
 ```
