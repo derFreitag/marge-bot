@@ -210,6 +210,16 @@ class Api(gitlab.Api):
             from_state,
             to_state,
         )
+        self.add_transition(
+            GET(
+                f"/projects/{attrs(info).project_id}/merge_requests/{attrs(info).iid}",
+                args={"include_rebase_in_progress": "true"},
+            ),
+            Ok(info),
+            sudo,
+            from_state,
+            to_state,
+        )
 
     def add_commit(self, project_id, info, sudo=None, from_state=None, to_state=None):
         path = f"/projects/{project_id}/repository/commits/{{0.id}}"
