@@ -189,7 +189,10 @@ class MergeRequest(gitlab.Resource):
 
     def refetch_info(self):
         self._info = self._api.call(
-            GET(f"/projects/{self.project_id}/merge_requests/{self.iid}")
+            GET(
+                f"/projects/{self.project_id}/merge_requests/{self.iid}",
+                {"include_rebase_in_progress": "true"},
+            ),
         )
 
     def comment(self, message):
