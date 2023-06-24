@@ -60,8 +60,12 @@ module = [
     "marge.commit",
     "marge.git",
     "marge.gitlab",
+    "marge.interval",
     "marge.job",
+    "marge.merge_request",
     "marge.pipeline",
+    "marge.project",
+    "marge.single_merge_job",
     "marge.user",
 ]
 # strict = true

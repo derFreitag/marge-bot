@@ -1,6 +1,7 @@
+import enum
+import functools
 import logging as log
-from enum import IntEnum, unique
-from functools import partial
+from typing import TYPE_CHECKING, Any, Dict, List, cast
 
 from . import gitlab
 
@@ -9,25 +10,32 @@ GET = gitlab.GET
 
 class Project(gitlab.Resource):
     @classmethod
-    def fetch_by_id(cls, project_id, api) -> "Project":
+    def fetch_by_id(cls, project_id: int, api: gitlab.Api) -> "Project":
         info = api.call(GET(f"/projects/{project_id}"))
+        if TYPE_CHECKING:
+            assert isinstance(info, dict)
         return cls(api, info)
 
     @classmethod
-    def fetch_by_path(cls, project_path, api):
-        def filter_by_path_with_namespace(projects):
+    def fetch_by_path(cls, project_path: str, api: gitlab.Api) -> "Project":
+        def filter_by_path_with_namespace(
+            projects: List[Dict[str, Any]]
+        ) -> List[Dict[str, Any]]:
             return [p for p in projects if p["path_with_namespace"] == project_path]
 
-        make_project = partial(cls, api)
+        make_project = functools.partial(cls, api)
 
         all_projects = api.collect_all_pages(GET("/projects"))
-        return gitlab.from_singleton_list(make_project)(
-            filter_by_path_with_namespace(all_projects)
+        return cast(
+            Project,
+            gitlab.from_singleton_list(make_project)(
+                filter_by_path_with_namespace(all_projects)
+            ),
         )
 
     @classmethod
-    def fetch_all_mine(cls, api):
-        projects_kwargs = {
+    def fetch_all_mine(cls, api: gitlab.Api) -> List["Project"]:
+        projects_kwargs: Dict[str, Any] = {
             "membership": True,
             "with_merge_requests_enabled": True,
             "archived": False,
@@ -46,8 +54,10 @@ class Project(gitlab.Resource):
                 projects_kwargs,
             )
         )
+        if TYPE_CHECKING:
+            assert isinstance(projects_info, list)
 
-        def project_seems_ok(project_info):
+        def project_seems_ok(project_info: Dict[str, Any]) -> bool:
             # A bug in at least GitLab 9.3.5 would make GitLab not report permissions after
             # moving subgroups. See for full story #19.
             permissions = project_info["permissions"]
@@ -72,7 +82,7 @@ class Project(gitlab.Resource):
                 project_info["permissions"]["marge"] = {
                     "access_level": AccessLevel.developer
                 }
-            elif not project_seems_ok(projects_info):
+            elif not project_seems_ok(project_info):
                 continue
 
             projects.append(cls(api, project_info))
@@ -80,41 +90,72 @@ class Project(gitlab.Resource):
         return projects
 
     @property
-    def default_branch(self):
-        return self.info["default_branch"]
+    def id(self) -> int:
+        result = self._info["id"]
+        if TYPE_CHECKING:
+            assert isinstance(result, int)
+        return result
 
     @property
-    def path_with_namespace(self):
-        return self.info["path_with_namespace"]
+    def default_branch(self) -> str:
+        result = self.info["default_branch"]
+        if TYPE_CHECKING:
+            assert isinstance(result, str)
+        return result
+
+    @property
+    def path_with_namespace(self) -> str:
+        result = self.info["path_with_namespace"]
+        if TYPE_CHECKING:
+            assert isinstance(result, str)
+        return result
 
     @property
     def ssh_url_to_repo(self) -> str:
-        return self.info["ssh_url_to_repo"]
+        result = self.info["ssh_url_to_repo"]
+        if TYPE_CHECKING:
+            assert isinstance(result, str)
+        return result
 
     @property
-    def http_url_to_repo(self):
-        return self.info["http_url_to_repo"]
+    def http_url_to_repo(self) -> str:
+        result = self.info["http_url_to_repo"]
+        if TYPE_CHECKING:
+            assert isinstance(result, str)
+        return result
 
     @property
-    def merge_requests_enabled(self):
-        return self.info["merge_requests_enabled"]
+    def merge_requests_enabled(self) -> bool:
+        result = self.info["merge_requests_enabled"]
+        if TYPE_CHECKING:
+            assert isinstance(result, bool)
+        return result
 
     @property
-    def only_allow_merge_if_pipeline_succeeds(self):
-        return self.info["only_allow_merge_if_pipeline_succeeds"]
+    def only_allow_merge_if_pipeline_succeeds(self) -> bool:
+        result = self.info["only_allow_merge_if_pipeline_succeeds"]
+        if TYPE_CHECKING:
+            assert isinstance(result, bool)
+        return result
 
     @property
-    def only_allow_merge_if_all_discussions_are_resolved(
+    def only_allow_merge_if_all_discussions_are_resolved(  # pylint: disable=invalid-name
         self,
-    ):  # pylint: disable=invalid-name
-        return self.info["only_allow_merge_if_all_discussions_are_resolved"]
+    ) -> bool:
+        result = self.info["only_allow_merge_if_all_discussions_are_resolved"]
+        if TYPE_CHECKING:
+            assert isinstance(result, bool)
+        return result
 
     @property
-    def approvals_required(self):
-        return self.info["approvals_before_merge"]
+    def approvals_required(self) -> int:
+        result = self.info["approvals_before_merge"]
+        if TYPE_CHECKING:
+            assert isinstance(result, int)
+        return result
 
     @property
-    def access_level(self):
+    def access_level(self) -> int:
         permissions = self.info["permissions"]
         effective_access = (
             permissions["project_access"]
@@ -128,8 +169,8 @@ class Project(gitlab.Resource):
 
 
 # pylint: disable=invalid-name
-@unique
-class AccessLevel(IntEnum):
+@enum.unique
+class AccessLevel(enum.IntEnum):
     # See https://docs.gitlab.com/ce/api/access_requests.html
     none = 0
     minimal = 5

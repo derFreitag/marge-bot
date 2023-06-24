@@ -33,6 +33,13 @@ class Commit(gitlab.Resource):
         return cls(api, commit_info)
 
     @property
+    def id(self) -> str:
+        result = self._info["id"]
+        if TYPE_CHECKING:
+            assert isinstance(result, str)
+        return result
+
+    @property
     def short_id(self) -> str:
         result = self.info["short_id"]
         if TYPE_CHECKING:
