@@ -35,8 +35,8 @@ class Repo:
     remote_url: str
     local_path: str
     ssh_key_file: Optional[str]
-    timeout: datetime.timedelta
-    reference: str
+    timeout: Optional[datetime.timedelta]
+    reference: Optional[str]
 
     def clone(self) -> None:
         reference_flag = "--reference=" + self.reference if self.reference else ""

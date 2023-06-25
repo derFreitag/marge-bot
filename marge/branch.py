@@ -18,6 +18,10 @@ class Branch(gitlab.Resource):
         return cls(api, info)
 
     @property
+    def id(self) -> int:
+        raise NotImplementedError()
+
+    @property
     def name(self) -> str:
         name = self.info["name"]
         if TYPE_CHECKING:

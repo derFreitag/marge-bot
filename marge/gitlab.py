@@ -245,7 +245,7 @@ class UnexpectedError(ApiError):
     pass
 
 
-class Resource:
+class Resource(abc.ABC):
     def __init__(self, api: Api, info: Dict[str, Any]):
         self._info = info
         self._api = api
@@ -255,8 +255,9 @@ class Resource:
         return self._info
 
     @property
-    def id(self) -> int:  # pylint: disable=invalid-name
-        return cast(int, self.info["id"])
+    @abc.abstractmethod
+    def id(self) -> Union[int, str]:  # pylint: disable=invalid-name
+        ...
 
     @property
     def api(self) -> Api:

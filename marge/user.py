@@ -2,25 +2,30 @@ from typing import TYPE_CHECKING, Optional
 
 from . import gitlab
 
-GET = gitlab.GET
-
 
 class User(gitlab.Resource):
     @classmethod
     def myself(cls, api: gitlab.Api) -> "User":
-        info = api.call(GET("/user"))
+        info = api.call(gitlab.GET("/user"))
         if TYPE_CHECKING:
             assert isinstance(info, dict)
 
         if info.get("is_admin") is None:  # WORKAROUND FOR BUG IN 9.2.2
             try:
                 # sudoing succeeds iff we are admin
-                api.call(GET("/user"), sudo=info["id"])
+                api.call(gitlab.GET("/user"), sudo=info["id"])
                 info["is_admin"] = True
             except gitlab.Forbidden:
                 info["is_admin"] = False
 
         return cls(api, info)
+
+    @property
+    def id(self) -> int:
+        result = self._info["id"]
+        if TYPE_CHECKING:
+            assert isinstance(result, int)
+        return result
 
     @property
     def is_admin(self) -> bool:
@@ -31,7 +36,7 @@ class User(gitlab.Resource):
 
     @classmethod
     def fetch_by_id(cls, user_id: int, api: gitlab.Api) -> "User":
-        info = api.call(GET(f"/users/{user_id}"))
+        info = api.call(gitlab.GET(f"/users/{user_id}"))
         if TYPE_CHECKING:
             assert isinstance(info, dict)
         return cls(api, info)
@@ -39,7 +44,7 @@ class User(gitlab.Resource):
     @classmethod
     def fetch_by_username(cls, username: str, api: gitlab.Api) -> "User":
         info = api.call(
-            GET(
+            gitlab.GET(
                 "/users",
                 {"username": username},
                 gitlab.from_singleton_list(),
