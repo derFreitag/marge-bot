@@ -1,12 +1,21 @@
 import enum
 import functools
 import logging as log
-from enum import Enum, unique
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, cast
 
 from . import gitlab
 
 GET = gitlab.GET
+
+
+# pylint: disable=invalid-name
+@enum.unique
+class SquashOption(str, Enum):
+    always = "always"
+    default_off = "default_off"
+    default_on = "default_on"
+    never = "never"
 
 
 class Project(gitlab.Resource):
@@ -133,7 +142,7 @@ class Project(gitlab.Resource):
         return result
 
     @property
-    def squash_option(self) -> str:
+    def squash_option(self) -> SquashOption:
         return SquashOption(self.info["squash_option"])
 
     @property
@@ -184,11 +193,3 @@ class AccessLevel(enum.IntEnum):
     developer = 30
     maintainer = 40
     owner = 50
-
-
-@enum.unique
-class SquashOption(enum.StrEnum):
-    always = "always"
-    default_off = "default_off"
-    default_on = "default_on"
-    never = "never"
