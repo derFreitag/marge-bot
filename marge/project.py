@@ -133,7 +133,7 @@ class Project(gitlab.Resource):
         return result
 
     @property
-    def squash_option(self):
+    def squash_option(self) -> SquashOption:
         return SquashOption(self.info["squash_option"])
 
     @property
