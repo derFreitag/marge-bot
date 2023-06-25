@@ -133,7 +133,7 @@ class Project(gitlab.Resource):
         return result
 
     @property
-    def squash_option(self) -> SquashOption:
+    def squash_option(self) -> str:
         return SquashOption(self.info["squash_option"])
 
     @property
@@ -186,8 +186,8 @@ class AccessLevel(enum.IntEnum):
     owner = 50
 
 
-@unique
-class SquashOption(str, Enum):
+@enum.unique
+class SquashOption(enum.StrEnum):
     always = "always"
     default_off = "default_off"
     default_on = "default_on"
