@@ -10,28 +10,29 @@ import collections
 import os
 import re
 import sys
+from typing import List, NoReturn
 
 STDIN = sys.stdin.buffer
 STDOUT = sys.stdout.buffer
 STDERR = sys.stderr.buffer
 
 
-def die(msg):
+def die(msg: bytes) -> NoReturn:
     STDERR.write(b"ERROR: ")
     STDERR.write(msg)
     sys.exit(1)
 
 
-def drop_trailing_newlines(lines):
+def drop_trailing_newlines(lines: List[bytes]) -> None:
     while lines and not lines[-1]:
         del lines[-1]
 
 
-def remove_duplicates(trailers):
+def remove_duplicates(trailers: List[bytes]) -> List[bytes]:
     return list(collections.OrderedDict((t, None) for t in trailers).keys())
 
 
-def rework_commit_message(commit_message, trailers):
+def rework_commit_message(commit_message: bytes, trailers: List[bytes]) -> bytes:
     if not commit_message:
         die(b"Expected a non-empty commit message")
 
@@ -62,13 +63,14 @@ def rework_commit_message(commit_message, trailers):
     return b"\n".join(reworked_lines)
 
 
-def main():
+def main() -> int:
     trailers = os.environb[b"TRAILERS"].split(b"\n") if os.environb[b"TRAILERS"] else []
     assert all(b":" in trailer for trailer in trailers), trailers
     original_commit_message = STDIN.read().strip()
     new_commit_message = rework_commit_message(original_commit_message, trailers)
     STDOUT.write(new_commit_message)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

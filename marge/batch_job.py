@@ -1,10 +1,11 @@
-# pylint: disable=too-many-branches,too-many-statements,arguments-differ
 import logging as log
-from time import sleep
+import time
+from typing import List, Optional
 
-from . import git, gitlab
+from . import git, gitlab, job
+from . import project as mb_project
+from . import user as mb_user
 from .commit import Commit
-from .job import CannotMerge, MergeJob, SkipMerge
 from .merge_request import MergeRequest
 from .pipeline import Pipeline
 
@@ -13,9 +14,19 @@ class CannotBatch(Exception):
     pass
 
 
-class BatchMergeJob(MergeJob):
+class BatchMergeJob(job.MergeJob):
+    BATCH_BRANCH_NAME = "marge_bot_batch_merge_job"
+
     def __init__(
-        self, *, api, user, project, repo, options, merge_requests, batch_branch_name
+        self,
+        *,
+        api: gitlab.Api,
+        user: mb_user.User,
+        project: mb_project.Project,
+        repo: git.Repo,
+        options: job.MergeJobOptions,
+        merge_requests: List[MergeRequest],
+        batch_branch_name: str,
     ):
         super().__init__(
             api=api, user=user, project=project, repo=repo, options=options
@@ -23,14 +34,14 @@ class BatchMergeJob(MergeJob):
         self.batch_branch_name = batch_branch_name
         self._merge_requests = merge_requests
 
-    def remove_batch_branch(self):
+    def remove_batch_branch(self) -> None:
         log.info("Removing local batch branch")
         try:
             self._repo.remove_branch(self.batch_branch_name)
         except git.GitError:
             pass
 
-    def close_batch_mr(self):
+    def close_batch_mr(self) -> None:
         log.info("Closing batch MRs")
         params = {
             "author_id": self._user.id,
@@ -54,7 +65,7 @@ class BatchMergeJob(MergeJob):
                     log.info("Cancelling obsolete batch pipeline %s", batch_pipeline.id)
                     batch_pipeline.cancel()
 
-    def create_batch_mr(self, target_branch):
+    def create_batch_mr(self, target_branch: str) -> MergeRequest:
         self.push_batch()
         log.info("Creating batch MR")
         params = {
@@ -71,7 +82,9 @@ class BatchMergeJob(MergeJob):
         log.info("Batch MR !%s created", batch_mr.iid)
         return batch_mr
 
-    def get_mrs_with_common_target_branch(self, target_branch):
+    def get_mrs_with_common_target_branch(
+        self, target_branch: str
+    ) -> List[MergeRequest]:
         log.info("Filtering MRs with target branch %s", target_branch)
         return [
             merge_request
@@ -79,7 +92,9 @@ class BatchMergeJob(MergeJob):
             if merge_request.target_branch == target_branch
         ]
 
-    def ensure_mergeable_mr(self, merge_request, skip_ci=False):
+    def ensure_mergeable_mr(
+        self, merge_request: MergeRequest, skip_ci: bool = False
+    ) -> None:
         super().ensure_mergeable_mr(merge_request)
 
         if self._project.only_allow_merge_if_pipeline_succeeds and not skip_ci:
@@ -87,15 +102,17 @@ class BatchMergeJob(MergeJob):
             if ci_status != "success":
                 raise CannotBatch(f"This MR has not passed CI. {pipeline_msg}")
 
-    def get_mergeable_mrs(self, merge_requests):
+    def get_mergeable_mrs(
+        self, merge_requests: List[MergeRequest]
+    ) -> List[MergeRequest]:
         log.info("Filtering mergeable MRs")
         mergeable_mrs = []
         for merge_request in merge_requests:
             try:
                 self.ensure_mergeable_mr(merge_request)
-            except (CannotBatch, SkipMerge) as ex:
+            except (CannotBatch, job.SkipMerge) as ex:
                 log.warning('Skipping unbatchable MR: "%s"', ex)
-            except CannotMerge as ex:
+            except job.CannotMerge as ex:
                 log.warning('Skipping unmergeable MR: "%s"', ex)
                 self.unassign_from_mr(merge_request)
                 merge_request.comment(f"I couldn't merge this branch: {ex}")
@@ -103,11 +120,11 @@ class BatchMergeJob(MergeJob):
                 mergeable_mrs.append(merge_request)
         return mergeable_mrs
 
-    def push_batch(self):
+    def push_batch(self) -> None:
         log.info("Pushing batch branch")
         self._repo.push(self.batch_branch_name, force=True)
 
-    def ensure_mr_not_changed(self, merge_request):
+    def ensure_mr_not_changed(self, merge_request: MergeRequest) -> None:
         log.info("Ensuring MR !%s did not change", merge_request.iid)
         changed_mr = MergeRequest.fetch_by_iid(
             merge_request.project_id,
@@ -123,9 +140,11 @@ class BatchMergeJob(MergeJob):
             "sha",
         ):
             if getattr(changed_mr, attr) != getattr(merge_request, attr):
-                raise CannotMerge(error_message.format(attr.replace("_", " ")))
+                raise job.CannotMerge(error_message.format(attr.replace("_", " ")))
 
-    def merge_batch(self, target_branch, source_branch, no_ff=False):
+    def merge_batch(
+        self, target_branch: str, source_branch: str, no_ff: bool = False
+    ) -> str:
         if no_ff:
             return self._repo.merge(
                 target_branch,
@@ -140,9 +159,9 @@ class BatchMergeJob(MergeJob):
 
     def update_merge_request(
         self,
-        merge_request,
-        source_repo_url=None,
-    ):
+        merge_request: MergeRequest,
+        source_repo_url: Optional[str] = None,
+    ) -> str:
         log.info("Fusing MR !%s", merge_request.iid)
         approvals = merge_request.fetch_approvals()
 
@@ -164,7 +183,9 @@ class BatchMergeJob(MergeJob):
         # meantime, because we're about to impersonate the approvers, and
         # we don't want to approve unreviewed commits
         if sha_now != actual_sha:
-            raise CannotMerge("Someone pushed to branch while we were trying to merge")
+            raise job.CannotMerge(
+                "Someone pushed to branch while we were trying to merge"
+            )
 
         # As we're not using the API to merge the individual MR, we don't strictly need to reapprove it.
         # However, it's a little weird to look at the merged MR to find it has no approvals,
@@ -174,10 +195,10 @@ class BatchMergeJob(MergeJob):
 
     def accept_mr(
         self,
-        merge_request,
-        expected_remote_target_branch_sha,
-        source_repo_url=None,
-    ):
+        merge_request: MergeRequest,
+        expected_remote_target_branch_sha: str,
+        source_repo_url: Optional[str] = None,
+    ) -> str:
         log.info("Accept MR !%s", merge_request.iid)
 
         # Make sure latest commit in remote <target_branch> is the one we tested against
@@ -202,7 +223,7 @@ class BatchMergeJob(MergeJob):
         # Don't force push in case the remote has changed.
         self._repo.push(merge_request.target_branch, force=False)
 
-        sleep(2)
+        time.sleep(2)
 
         # At this point Gitlab should have recognised the MR as being accepted.
         log.info("Successfully merged MR !%s", merge_request.iid)
@@ -218,7 +239,8 @@ class BatchMergeJob(MergeJob):
 
         return final_sha
 
-    def execute(self):
+    def execute(self) -> None:
+        # pylint: disable=too-many-branches,too-many-statements
         # Cleanup previous batch work
         self.remove_batch_branch()
         self.close_batch_mr()
@@ -291,7 +313,7 @@ class BatchMergeJob(MergeJob):
                 # We don't need <source_branch> anymore. Remove it now in case another
                 # merge request is using the same branch name in a different project.
                 self._repo.remove_branch(merge_request.source_branch)
-            except (git.GitError, CannotMerge):
+            except (git.GitError, job.CannotMerge):
                 log.warning(
                     "Skipping MR !%s, got conflicts while rebasing", merge_request.iid
                 )
@@ -318,7 +340,7 @@ class BatchMergeJob(MergeJob):
         if self._project.only_allow_merge_if_pipeline_succeeds:
             try:
                 self.wait_for_ci_to_pass(batch_mr, commit_sha=batch_mr_sha)
-            except CannotMerge as err:
+            except job.CannotMerge as err:
                 for merge_request in working_merge_requests:
                     merge_request.comment(
                         f"Batch MR !{batch_mr.iid} failed: {err.reason} I will retry later...",
@@ -348,10 +370,10 @@ class BatchMergeJob(MergeJob):
                     f"I couldn't merge this branch: {str(err)} I will retry later...",
                 )
                 raise
-            except SkipMerge:
+            except job.SkipMerge:
                 # Raise here to avoid being caught below - we don't want to be unassigned.
                 raise
-            except CannotMerge as err:
+            except job.CannotMerge as err:
                 self.unassign_from_mr(merge_request)
                 merge_request.comment(f"I couldn't merge this branch: {err.reason}")
                 raise
@@ -377,4 +399,4 @@ class BatchMergeJob(MergeJob):
                 log.info("batch_mr.accept result: %s", ret)
             except gitlab.ApiError as err:
                 log.exception("Gitlab API Error:")
-                raise CannotMerge(f"Gitlab API Error: {err}") from err
+                raise job.CannotMerge(f"Gitlab API Error: {err}") from err

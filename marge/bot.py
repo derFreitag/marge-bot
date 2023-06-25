@@ -4,9 +4,9 @@ import logging as log
 import re
 import time
 from tempfile import TemporaryDirectory
-from typing import Optional
+from typing import List, Optional
 
-from . import batch_job, git, job
+from . import batch_job, git, gitlab, job
 from . import merge_request as merge_request_module
 from . import single_merge_job, store
 from . import user as user_module
@@ -16,7 +16,7 @@ MergeRequest = merge_request_module.MergeRequest
 
 
 class Bot:
-    def __init__(self, *, api, config):
+    def __init__(self, *, api: gitlab.Api, config: "BotConfig"):
         self._api = api
         self._config = config
 
@@ -31,8 +31,9 @@ class Bot:
                 not opts.add_reviewers
             ), f"{user.username} is not an admin, can't lookup Reviewed-by: email addresses "
 
-    def start(self):
+    def start(self) -> None:
         with TemporaryDirectory() as root_dir:
+            repo_manager: store.RepoManager
             if self._config.use_https:
                 repo_manager = store.HttpsRepoManager(
                     user=self.user,
@@ -52,14 +53,14 @@ class Bot:
             self._run(repo_manager)
 
     @property
-    def user(self):
+    def user(self) -> user_module.User:
         return self._config.user
 
     @property
-    def api(self):
+    def api(self) -> gitlab.Api:
         return self._api
 
-    def _run(self, repo_manager):
+    def _run(self, repo_manager: store.RepoManager) -> None:
         time_to_sleep_between_projects_in_secs = 1
         min_time_to_sleep_after_iterating_all_projects_in_secs = 30
         while True:
@@ -80,7 +81,7 @@ class Bot:
             log.info("Sleeping for %s seconds...", big_sleep)
             time.sleep(big_sleep)
 
-    def _get_projects(self):
+    def _get_projects(self) -> List[Project]:
         log.info("Finding out my current projects...")
         my_projects = Project.fetch_all_mine(self._api)
         project_regexp = self._config.project_regexp
@@ -101,10 +102,10 @@ class Bot:
 
     def _process_projects(
         self,
-        repo_manager,
-        time_to_sleep_between_projects_in_secs,
-        projects,
-    ):
+        repo_manager: store.RepoManager,
+        time_to_sleep_between_projects_in_secs: int,
+        projects: List[Project],
+    ) -> None:
         for project in projects:
             project_name = project.path_with_namespace
 
@@ -118,7 +119,9 @@ class Bot:
             self._process_merge_requests(repo_manager, project, merge_requests)
             time.sleep(time_to_sleep_between_projects_in_secs)
 
-    def _get_merge_requests(self, project, project_name):
+    def _get_merge_requests(
+        self, project: Project, project_name: str
+    ) -> List[MergeRequest]:
         log.info("Fetching merge requests assigned to me in %s...", project_name)
         my_merge_requests = MergeRequest.fetch_all_open_for_user(
             project_id=project.id,
@@ -155,7 +158,12 @@ class Bot:
             )
         return source_filtered_mrs
 
-    def _process_merge_requests(self, repo_manager, project, merge_requests):
+    def _process_merge_requests(
+        self,
+        repo_manager: store.RepoManager,
+        project: Project,
+        merge_requests: List[MergeRequest],
+    ) -> None:
         if not merge_requests:
             log.info("Nothing to merge at this point...")
             return
@@ -185,7 +193,7 @@ class Bot:
                 return
             except batch_job.CannotBatch as err:
                 log.warning("BatchMergeJob aborted: %s", err)
-            except batch_job.CannotMerge as err:
+            except job.CannotMerge as err:
                 log.warning("BatchMergeJob failed: %s", err)
                 return
             except git.GitError as err:
@@ -200,7 +208,13 @@ class Bot:
         )
         merge_job.execute()
 
-    def _get_single_job(self, project, merge_request, repo, options):
+    def _get_single_job(
+        self,
+        project: Project,
+        merge_request: MergeRequest,
+        repo: git.Repo,
+        options: job.MergeJobOptions,
+    ) -> single_merge_job.SingleMergeJob:
         return single_merge_job.SingleMergeJob(
             api=self._api,
             user=self.user,
@@ -217,13 +231,13 @@ class BotConfig:
     use_https: bool
     auth_token: str
     ssh_key_file: Optional[str]
-    project_regexp: re.Pattern
+    project_regexp: "re.Pattern[str]"
     merge_order: str
     merge_opts: job.MergeJobOptions
     git_timeout: datetime.timedelta
     git_reference_repo: str
-    branch_regexp: re.Pattern
-    source_branch_regexp: re.Pattern
+    branch_regexp: "re.Pattern[str]"
+    source_branch_regexp: "re.Pattern[str]"
     batch: bool
     cli: bool
     batch_branch_name: str

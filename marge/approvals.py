@@ -1,6 +1,9 @@
-from typing import TYPE_CHECKING, List, cast
+from typing import TYPE_CHECKING, List, Union, cast
 
 from . import gitlab
+
+if TYPE_CHECKING:
+    from . import merge_request as mb_merge_request
 
 
 class Approvals(gitlab.Resource):
@@ -66,7 +69,7 @@ class Approvals(gitlab.Resource):
         """
         self.approve(self)
 
-    def approve(self, obj: "Approvals") -> None:
+    def approve(self, obj: Union["Approvals", "mb_merge_request.MergeRequest"]) -> None:
         """Approve an object which can be a merge_request or an approval."""
         if self._api.version().release >= (9, 2, 2):
             approve_url = f"/projects/{obj.project_id}/merge_requests/{obj.iid}/approve"
