@@ -329,7 +329,9 @@ class MergeRequest(gitlab.Resource):
         if auto_squash is not None:
             params["squash"] = auto_squash
         result = self._api.call(
-            gitlab.PUT(f"/projects/{self.project_id}/merge_requests/{self.iid}/merge", params)
+            gitlab.PUT(
+                f"/projects/{self.project_id}/merge_requests/{self.iid}/merge", params
+            )
         )
         if TYPE_CHECKING:
             assert isinstance(result, dict)
