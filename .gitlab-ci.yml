@@ -42,6 +42,14 @@ lint:
     - pip install tox
     - tox -e flake8,mypy,pylint
     - tox -e black,isort -- --check
+    - |
+      git --version
+      echo "CI_MERGE_REQUEST_TARGET_BRANCH_NAME ${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"
+      MERGE_COMMITS=$(git rev-list --merges origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}..${CI_COMMIT_SHA})
+      if [[ -n "${MERGE_COMMITS}" ]]; then
+        echo "ERROR: The Merge Request (MR) contains a 'merge commit': ${MERGE_COMMITS}"
+        exit 1
+      fi
 
 docker-build:
   image:
