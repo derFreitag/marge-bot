@@ -260,7 +260,7 @@ class Repo:
             command.extend(["-C", self.local_path])
         command.extend([arg for arg in args if str(arg)])
 
-        log.info("Running %s", " ".join(shlex.quote(w) for w in command))
+        log.debug("Running %s", " ".join(shlex.quote(w) for w in command))
         try:
             timeout_seconds = (
                 self.timeout.total_seconds() if self.timeout is not None else None
