@@ -396,7 +396,7 @@ class BatchMergeJob(job.MergeJob):
                         self._project.only_allow_merge_if_pipeline_succeeds
                     ),
                 )
-                log.info("batch_mr.accept result: %s", ret)
+                log.debug("batch_mr.accept result: %s", ret)
             except gitlab.ApiError as err:
                 log.exception("Gitlab API Error:")
                 raise job.CannotMerge(f"Gitlab API Error: {err}") from err
