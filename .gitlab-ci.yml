@@ -23,7 +23,7 @@ test:
           - "3.10"
           - "3.11"
   script:
-    - pip install tox
+    - pip install tox poetry
     - tox -e py3
   coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
   artifacts:
@@ -39,7 +39,7 @@ lint:
   extends: .rules-merge-request
   image: python:3.11
   script:
-    - pip install tox
+    - pip install tox poetry
     - tox -e flake8,mypy,pylint
     - tox -e black,isort -- --check
 
