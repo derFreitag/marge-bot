@@ -2,7 +2,6 @@ from datetime import time
 
 import maya  # type: ignore[import]
 import pendulum
-from pendulum.helpers import set_test_now
 
 from marge.interval import IntervalUnion, WeeklyInterval
 
@@ -47,7 +46,7 @@ class TestWeekly:
 
         # During summer time
         now = pendulum.datetime(2019, 8, 30, tz="Europe/London")
-        set_test_now(now)
+        pendulum.travel_to(now)
         assert (
             WeeklyInterval.from_human(
                 "Mon 10:00 Europe/London - Fri 18:00 Europe/London"
@@ -57,7 +56,7 @@ class TestWeekly:
 
         # Outside summer time
         now = pendulum.datetime(2019, 12, 30, tz="Europe/London")
-        set_test_now(now)
+        pendulum.travel_to(now)
         assert (
             WeeklyInterval.from_human(
                 "Mon 09:00 Europe/London - Fri 17:00 Europe/London"
@@ -106,7 +105,7 @@ class TestIntervalUnion:
 
         # During summer time
         now = pendulum.datetime(2019, 8, 30, tz="Europe/London")
-        set_test_now(now)
+        pendulum.travel_to(now)
         assert (
             IntervalUnion.from_human(
                 "Mon 11:00 Europe/London - Fri 19:00 Europe/London,"
@@ -117,7 +116,7 @@ class TestIntervalUnion:
 
         # Outside summer time
         now = pendulum.datetime(2019, 12, 30, tz="Europe/London")
-        set_test_now(now)
+        pendulum.travel_to(now)
         assert (
             IntervalUnion.from_human(
                 "Mon 10:00 Europe/London - Fri 18:00 Europe/London,"
