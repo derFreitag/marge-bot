@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=builder /src/requirements.txt /src/dist/marge-*.tar.gz /tmp/
 
-RUN pip install -r /tmp/requirements.txt && \
+RUN pip install --no-deps -r /tmp/requirements.txt && \
   pip install /tmp/marge-*.tar.gz
 
 ENTRYPOINT ["marge"]
