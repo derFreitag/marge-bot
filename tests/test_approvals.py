@@ -116,7 +116,7 @@ class TestApprovals:
 
     def test_reapprove(self):
         self.approvals.reapprove()
-        self.api.call.has_calls(
+        self.api.call.assert_has_calls(
             [
                 call(
                     POST(
