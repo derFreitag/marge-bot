@@ -45,14 +45,14 @@ class SingleMergeJob(mb_job.MergeJob):
             log.warning(message)
             self.unassign_from_mr(merge_request)
             merge_request.comment(message)
-        except git.GitError:
-            log.exception("Unexpected Git error")
+        except git.GitError as err:
+            log.exception("Unexpected Git error", exc_info=err)
             merge_request.comment(
                 "Something seems broken on my local git repo; check my logs!"
             )
             raise
-        except Exception:
-            log.exception("Unexpected Exception")
+        except Exception as err:
+            log.exception("Unexpected Exception", exc_info=err)
             merge_request.comment(
                 "I'm broken on the inside, please somebody fix me... :cry:"
             )
