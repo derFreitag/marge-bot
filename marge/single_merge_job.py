@@ -53,9 +53,7 @@ class SingleMergeJob(mb_job.MergeJob):
             raise
         except Exception as err:
             log.exception("Unexpected Exception", exc_info=err)
-            merge_request.comment(
-                "I'm broken on the inside, please somebody fix me... :cry:"
-            )
+            merge_request.comment("Unexpected exception in bot while handling this MR.")
             self.unassign_from_mr(merge_request)
             raise
 
