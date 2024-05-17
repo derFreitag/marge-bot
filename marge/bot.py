@@ -189,7 +189,7 @@ class Bot:
                 batch_branch_name=self._config.batch_branch_name,
             )
             try:
-                batch_merge_job.execute()
+                batch_merge_job.execute(exc_comment=self._config.exc_comment)
                 return
             except batch_job.CannotBatch as err:
                 log.warning("BatchMergeJob aborted: %s", err)
@@ -206,7 +206,7 @@ class Bot:
             repo=repo,
             options=self._config.merge_opts,
         )
-        merge_job.execute()
+        merge_job.execute(exc_comment=self._config.exc_comment)
 
     def _get_single_job(
         self,
@@ -241,6 +241,7 @@ class BotConfig:
     batch: bool
     cli: bool
     batch_branch_name: str
+    exc_comment: Optional[str]
 
 
 MergeJobOptions = job.MergeJobOptions
