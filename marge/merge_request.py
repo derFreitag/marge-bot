@@ -9,6 +9,9 @@ from . import user as mb_user
 from .approvals import Approvals
 
 NO_JOBS_MESSAGE = "No stages / jobs for this pipeline."
+RULES_PREVENT_JOBS_MESSAGE = (
+    "The rules configuration prevented any jobs from being added to the pipeline."
+)
 
 
 class MergeRequest(gitlab.Resource):
@@ -392,12 +395,32 @@ class MergeRequest(gitlab.Resource):
                 )
             )
         except gitlab.BadRequest as exc:
-            if exc.error_message is None or NO_JOBS_MESSAGE not in exc.error_message:
+            if exc.error_message is None:
                 raise
 
-            log.info(
-                "The pipeline is not configured for MR jobs, triggering a usual pipeline."
-            )
+            should_trigger_branch = False
+
+            if NO_JOBS_MESSAGE in exc.error_message:
+                # Failed due to unavailable merge request job definitions
+                should_trigger_branch = True
+                log.info(
+                    "The pipeline is not configured for MR jobs, triggering a usual pipeline."
+                )
+
+            elif RULES_PREVENT_JOBS_MESSAGE in exc.error_message:
+                # This does not necessarily always mean that we just need to trigger a branch pipeline,
+                # but that is one possible reason. Worth trying.
+
+                log.info(
+                    "Error trying to trigger MR pipeline: '%s', triggering a branch pipeline as fallback.",
+                    exc.error_message,
+                )
+                should_trigger_branch = True
+
+            if not should_trigger_branch:
+                # Propagate the error if we are not going to just trigger the branch pipeline
+                raise
+
             result = self._api.call(
                 gitlab.POST(
                     f"/projects/{self.project_id}/pipeline?ref={self.source_branch}"
