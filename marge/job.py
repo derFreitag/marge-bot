@@ -193,7 +193,11 @@ class MergeJob:
         if commit_sha is None:
             commit_sha = merge_request.sha
 
-        log.info("Waiting for CI to pass for MR !%s", merge_request.iid)
+        log.info(
+            "Waiting for CI to pass for MR !%s - %s",
+            merge_request.iid,
+            merge_request.web_url,
+        )
         if TYPE_CHECKING:
             assert self._options.ci_timeout is not None
         consecutive_errors = 0
