@@ -224,7 +224,7 @@ class MergeJob:
             if ci_status == "canceled":
                 raise CannotMerge(f"Someone canceled the CI. {pipeline_msg}")
 
-            if ci_status not in ("pending", "running"):
+            if ci_status not in ("created", "pending", "running"):
                 log.warning("Suspicious CI status: %r. %s", ci_status, pipeline_msg)
 
             log.debug(
