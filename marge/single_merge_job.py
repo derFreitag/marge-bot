@@ -136,7 +136,7 @@ class SingleMergeJob(mb_job.MergeJob):
                         target_project.only_allow_merge_if_pipeline_succeeds
                     ),
                 )
-                log.info("merge_request.accept result: %s", ret)
+                log.debug("merge_request.accept result: %s", ret)
             except gitlab.NotAcceptable as err:
                 new_target_sha = Commit.last_on_branch(
                     self._project.id, merge_request.target_branch, api
