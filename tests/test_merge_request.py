@@ -4,7 +4,12 @@ import pytest
 
 import marge.user
 from marge.gitlab import GET, POST, PUT, Api, BadRequest, Version
-from marge.merge_request import NO_JOBS_MESSAGE, MergeRequest, MergeRequestRebaseFailed
+from marge.merge_request import (
+    NO_JOBS_MESSAGE,
+    RULES_PREVENT_JOBS_MESSAGE,
+    MergeRequest,
+    MergeRequestRebaseFailed,
+)
 from tests.test_user import INFO as USER_INFO
 
 _MARGE_ID = 77
@@ -316,6 +321,28 @@ class TestMergeRequest:
         def side_effect(request):
             if request.endpoint == "/projects/1234/merge_requests/54/pipelines":
                 raise BadRequest(400, {"message": NO_JOBS_MESSAGE})
+            if request.endpoint == "/projects/1234/pipeline?ref=useless_new_feature":
+                return expected_result
+            return None
+
+        api.call = Mock(side_effect=side_effect)
+
+        result = self.merge_request.trigger_pipeline()
+
+        assert api.call.call_args_list == [
+            call(POST("/projects/1234/merge_requests/54/pipelines")),
+            call(POST("/projects/1234/pipeline?ref=useless_new_feature")),
+        ]
+
+        assert result == expected_result
+
+    def test_trigger_pipeline_rules_fallback_succeeds(self):
+        api = self.api
+        expected_result = object()
+
+        def side_effect(request):
+            if request.endpoint == "/projects/1234/merge_requests/54/pipelines":
+                raise BadRequest(400, {"message": RULES_PREVENT_JOBS_MESSAGE})
             if request.endpoint == "/projects/1234/pipeline?ref=useless_new_feature":
                 return expected_result
             return None
