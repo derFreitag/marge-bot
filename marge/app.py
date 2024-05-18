@@ -254,6 +254,12 @@ def _parse_config(
         action="store_true",
         help="Guaranteed final pipeline when assigned to marge-bot",
     )
+    parser.add_argument(
+        "--exc-comment",
+        type=str,
+        default=None,
+        help="Provide additional text, like a log URL, to append to some exception-related MR comments.",
+    )
 
     config = cast(argparse.Namespace, parser.parse_args(args))
 
@@ -381,6 +387,7 @@ def main(args: Optional[List[str]] = None) -> int:
             batch=options.batch,
             batch_branch_name=options.batch_branch_name,
             cli=options.cli,
+            exc_comment=options.exc_comment,
         )
 
         marge_bot = bot.Bot(api=api, config=config)

@@ -2,6 +2,7 @@
 import datetime
 import logging as log
 import time
+from typing import Optional
 
 from . import approvals as mb_approvals
 from . import git, gitlab
@@ -29,7 +30,7 @@ class SingleMergeJob(mb_job.MergeJob):
         self._merge_request = merge_request
         self._options = options
 
-    def execute(self) -> None:
+    def execute(self, exc_comment: Optional[str] = None) -> None:
         merge_request = self._merge_request
 
         log.info("Processing !%s - %r", merge_request.iid, merge_request.title)
@@ -47,15 +48,17 @@ class SingleMergeJob(mb_job.MergeJob):
             merge_request.comment(message)
         except git.GitError as err:
             log.exception("Unexpected Git error", exc_info=err)
-            merge_request.comment(
-                "Something seems broken on my local git repo; check my logs!"
-            )
+            comment = "Something seems broken on my local git repo; check my logs!"
+            if exc_comment:
+                comment += " " + exc_comment
+            merge_request.comment(comment)
             raise
         except Exception as err:
             log.exception("Unexpected Exception", exc_info=err)
-            merge_request.comment(
-                "I'm broken on the inside, please somebody fix me... :cry:"
-            )
+            comment = "Unexpected exception in bot while handling this MR."
+            if exc_comment:
+                comment += " " + exc_comment
+            merge_request.comment(comment)
             self.unassign_from_mr(merge_request)
             raise
 

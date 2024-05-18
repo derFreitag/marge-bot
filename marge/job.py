@@ -47,7 +47,7 @@ class MergeJob:
     def opts(self) -> "MergeJobOptions":
         return self._options
 
-    def execute(self) -> None:
+    def execute(self, exc_comment: Optional[str] = None) -> None:
         raise NotImplementedError
 
     def ensure_mergeable_mr(self, merge_request: MergeRequest) -> None:

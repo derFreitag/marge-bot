@@ -187,7 +187,7 @@ class SingleJobMockLab(MockLab):
         )
         api.expected_note(
             self.merge_request_info,
-            "I'm broken on the inside, please somebody fix me... :cry:",
+            "Unexpected exception in bot while handling this MR.",
         )
 
     def push_updated(self, remote_url, remote_branch, old_sha, new_sha):

@@ -239,7 +239,7 @@ class BatchMergeJob(job.MergeJob):
 
         return final_sha
 
-    def execute(self) -> None:
+    def execute(self, exc_comment: Optional[str] = None) -> None:
         # pylint: disable=too-many-branches,too-many-statements
         # Cleanup previous batch work
         self.remove_batch_branch()

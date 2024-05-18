@@ -144,6 +144,9 @@ optional arguments:
   --guarantee-final-pipeline
                         Guaranteed final pipeline when assigned to marge-bot
                         [env var: MARGE_GUARANTEE_FINAL_PIPELINE] (default: False)
+  --exc-comment EXC_COMMENT
+                        Provide additional text, like a log URL, to append to some exception-related MR comments.
+                        [env var: MARGE_EXC_COMMENT] (default: None)
 ```
 Here is a config file example
 ```yaml
